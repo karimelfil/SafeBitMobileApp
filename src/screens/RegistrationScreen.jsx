@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import DatePicker from "react-native-date-picker";
+import Icon from "react-native-vector-icons/FontAwesome6";
 import FancyBackButton from "../components/common/FancyBackButton";
 import styles from "./RegistrationScreen.styles";
 
@@ -25,7 +26,7 @@ function CheckRow({ label, checked, onPress }) {
   return (
     <Pressable onPress={onPress} style={styles.checkRow}>
       <View style={[styles.checkBox, checked && styles.checkBoxOn]}>
-        {checked ? <Text style={styles.checkMark}>âœ“</Text> : null}
+        {checked ? <Icon name="check" size={11} color="#000000" solid /> : null}
       </View>
       <Text style={styles.checkLabel} numberOfLines={2}>
         {label}
@@ -336,11 +337,13 @@ export default function RegistrationScreen({ navigation }) {
               gender === 1 ? styles.genderCardOn : styles.genderCardOff,
             ]}
           >
-            <Text
-              style={[styles.genderIcon, gender === 1 && styles.genderIconOn]}
-            >
-              â™‚
-            </Text>
+            <Icon
+              name="mars"
+              size={26}
+              color={gender === 1 ? "#1DB954" : "#9AA0A6"}
+              solid
+              style={styles.genderIcon}
+            />
             <Text
               style={[styles.genderText, gender === 1 && styles.genderTextOn]}
             >
@@ -355,11 +358,13 @@ export default function RegistrationScreen({ navigation }) {
               gender === 2 ? styles.genderCardOn : styles.genderCardOff,
             ]}
           >
-            <Text
-              style={[styles.genderIcon, gender === 2 && styles.genderIconOn]}
-            >
-              â™€
-            </Text>
+            <Icon
+              name="venus"
+              size={26}
+              color={gender === 2 ? "#1DB954" : "#9AA0A6"}
+              solid
+              style={styles.genderIcon}
+            />
             <Text
               style={[styles.genderText, gender === 2 && styles.genderTextOn]}
             >

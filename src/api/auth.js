@@ -20,3 +20,13 @@ export async function register(payload) {
   const res = await api.post("auth/register", payload);
   return res.data;
 }
+
+export async function logout() {
+  const res = await api.post("auth/logout");
+  return res.data;
+}
+
+export async function deactivateAccount(payload) {
+  const res = await api.post("auth/deactivate-account", payload);
+  return res.data;
+}

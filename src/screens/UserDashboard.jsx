@@ -1,13 +1,17 @@
-﻿import React from "react";
+import React, { useCallback, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   Pressable,
   ScrollView,
   Image,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/FontAwesome6";
+import { getUserProfile } from "../api/user";
 import styles from "./UserDashboard.styles";
 
 const logo = require("../../assets/logo.png");
@@ -48,6 +52,41 @@ const mockRecentScans = [
 ];
 
 export default function UserDashboard({ navigation }) {
+  const [firstName, setFirstName] = useState("");
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      (async () => {
+        try {
+          const storedUserId = await AsyncStorage.getItem("userId");
+          if (!storedUserId) return;
+
+          const profileRes = await getUserProfile(storedUserId);
+          const profileData = profileRes?.data || profileRes;
+
+          if (active) {
+            setFirstName(String(profileData?.firstName || "").trim());
+          }
+        } catch (err) {
+          if (active) {
+            setFirstName("");
+            if (err?.response?.status !== 401) {
+              Alert.alert("Error", "Could not load your name.");
+            }
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  const greetingName = firstName || "User";
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <View style={styles.container}>
@@ -66,7 +105,7 @@ export default function UserDashboard({ navigation }) {
             </Pressable>
           </View>
 
-          <Text style={styles.hello}>Hello, User</Text>
+          <Text style={styles.hello}>Hello, {greetingName}</Text>
           <Text style={styles.sub}>Scan a menu to discover safe meals</Text>
         </View>
 
@@ -95,7 +134,10 @@ export default function UserDashboard({ navigation }) {
 
           <View style={styles.recentHeader}>
             <Text style={styles.recentTitle}>Recent Scans</Text>
-            <Pressable onPress={() => navigation.navigate("History")} style={styles.moreBtn}>
+            <Pressable
+              onPress={() => navigation.navigate("History")}
+              style={styles.moreBtn}
+            >
               <Text style={styles.moreBtnText}>...</Text>
             </Pressable>
           </View>

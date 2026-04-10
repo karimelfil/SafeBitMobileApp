@@ -5,7 +5,7 @@ export const BASE_URL = "http://192.168.18.10:5000/api/";
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 20000,
+  timeout: 90000,
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -13,6 +13,14 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
+  if (config.data instanceof FormData) {
+    if (typeof config.headers?.delete === "function") {
+      config.headers.delete("Content-Type");
+    } else if (config.headers) {
+      delete config.headers["Content-Type"];
+    }
+  }
+
   const token = await AsyncStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

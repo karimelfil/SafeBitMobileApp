@@ -14,70 +14,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   errorCodes as documentErrorCodes,
   isErrorWithCode as isDocumentErrorWithCode,
+  keepLocalCopy,
   pick,
   types as documentTypes,
 } from "@react-native-documents/picker";
-import { launchCamera } from "react-native-image-picker";
+import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import Icon from "react-native-vector-icons/FontAwesome6";
 import FancyBackButton from "../components/common/FancyBackButton";
+import { submitDishFeedback } from "../api/feedback";
+import { uploadMenu } from "../api/menu";
 import styles from "./MenuUploadScreen.styles";
-
-const mockResults = [
-  {
-    id: "1",
-    name: "Grilled Salmon",
-    category: "Main Course",
-    status: "safe",
-    description: "Fresh Atlantic salmon with herbs and lemon.",
-    allergens: ["Fish"],
-    warnings: [],
-  },
-  {
-    id: "2",
-    name: "Caesar Salad",
-    category: "Appetizer",
-    status: "warning",
-    description: "Romaine lettuce with Caesar dressing, parmesan, and croutons.",
-    allergens: ["Dairy", "Wheat", "Fish"],
-    warnings: ["Contains anchovies in dressing"],
-  },
-  {
-    id: "3",
-    name: "Peanut Butter Cookies",
-    category: "Dessert",
-    status: "unsafe",
-    description: "Classic peanut butter cookies with a dense nut base.",
-    allergens: ["Peanuts", "Wheat", "Eggs"],
-    warnings: ["High peanut content"],
-  },
-  {
-    id: "4",
-    name: "Margherita Pizza",
-    category: "Main Course",
-    status: "warning",
-    description: "Traditional pizza with tomato sauce, basil, and mozzarella.",
-    allergens: ["Dairy", "Wheat"],
-    warnings: ["Contains gluten and dairy"],
-  },
-  {
-    id: "5",
-    name: "Grilled Chicken Breast",
-    category: "Main Course",
-    status: "safe",
-    description: "Lean grilled chicken breast served with herbs.",
-    allergens: [],
-    warnings: [],
-  },
-  {
-    id: "6",
-    name: "Beef Tacos",
-    category: "Main Course",
-    status: "safe",
-    description: "Seasoned beef in corn tortillas with fresh toppings.",
-    allergens: [],
-    warnings: [],
-  },
-];
 
 function getStatusIcon(status) {
   if (status === "safe") {
@@ -90,18 +36,169 @@ function getStatusIcon(status) {
 }
 
 function getStatusLabel(status) {
-  if (status === "safe") return "Best Pick";
-  if (status === "warning") return "Use Caution";
-  return "Avoid";
+  if (status === "safe") return "Safe";
+  if (status === "warning") return "Risky";
+  return "Unsafe";
+}
+
+function formatTag(tag) {
+  return String(tag || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function cleanDishName(name) {
+  return String(name ?? "")
+    .replace(/^Dish Name:\s*/i, "")
+    .trim()
+    .toLowerCase();
+}
+
+function toValidDishId(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeStoredDish(dish) {
+  const id = toValidDishId(
+    dish?.dishID ?? dish?.dishId ?? dish?.DishID ?? dish?.DishId ?? dish?.id
+  );
+  const name = cleanDishName(dish?.dishName ?? dish?.DishName ?? dish?.name);
+  return { id, name };
+}
+
+function extractStoredDishes(payload) {
+  const candidates = [
+    payload?.dishes,
+    payload?.menu?.dishes,
+    payload?.menuDishes,
+    payload?.savedDishes,
+    payload?.createdDishes,
+    payload?.result?.dishes,
+    payload?.data?.dishes,
+    payload?.aiResult?.savedDishes,
+  ];
+
+  const merged = [];
+  for (const list of candidates) {
+    if (Array.isArray(list)) merged.push(...list);
+  }
+
+  return merged.map(normalizeStoredDish).filter((item) => item.id && item.name);
+}
+
+function buildDetectedIngredients(dish) {
+  const ingredientsRaw =
+    dish?.ingredients_found || dish?.ingredientsFound || dish?.IngredientsFound;
+  const ingredients = Array.isArray(ingredientsRaw) ? ingredientsRaw : [];
+
+  return ingredients.map(formatTag).filter(Boolean);
+}
+
+function buildDishWarnings(dish) {
+  const warnings = [];
+
+  if (dish?.needs_user_confirmation) {
+    warnings.push("Needs confirmation with the restaurant before ordering.");
+  }
+
+  (dish?.notes || []).forEach((note) => {
+    if (note) warnings.push(note);
+  });
+
+  (dish?.conflicts || []).forEach((conflict) => {
+    if (conflict?.explanation) warnings.push(conflict.explanation);
+  });
+
+  return [...new Set(warnings)];
+}
+
+function buildDetectedDiseases(dish) {
+  const diseaseTriggers = Array.isArray(dish?.conflicts)
+    ? dish.conflicts
+        .filter((conflict) => String(conflict?.type || "").toLowerCase() === "disease")
+        .map((conflict) => conflict?.trigger)
+    : [];
+
+  return [...new Set(diseaseTriggers.map(formatTag).filter(Boolean))];
+}
+
+function mapUploadResponseToResults(payload) {
+  const aiResult = payload?.aiResult || {};
+  const apiDishesRaw = aiResult?.dishes || aiResult?.Dishes;
+  const apiDishes = Array.isArray(apiDishesRaw) ? apiDishesRaw : [];
+  const storedDishes = extractStoredDishes(payload);
+  const storedDishIdByName = new Map(storedDishes.map((dish) => [dish.name, dish.id]));
+
+  return apiDishes.map((dish, index) => {
+    const safetyLevel = String(
+      dish?.safety_level || dish?.safetyLevel || dish?.SafetyLevel || ""
+    ).toUpperCase();
+    const needsUserConfirmation = Boolean(
+      dish?.needs_user_confirmation ?? dish?.needsUserConfirmation
+    );
+    const isSafe = safetyLevel === "SAFE";
+    const isUnsafe = safetyLevel === "RISKY" || safetyLevel === "UNSAFE";
+    const hasWarning = safetyLevel === "CAUTION" || needsUserConfirmation;
+    const displayLevel =
+      safetyLevel === "CAUTION"
+        ? "RISKY"
+        : isUnsafe
+        ? "UNSAFE"
+        : safetyLevel || "UNKNOWN";
+
+    const ingredients = buildDetectedIngredients(dish);
+    const conflicts = Array.isArray(dish?.conflicts) ? dish.conflicts : [];
+    const notes = Array.isArray(dish?.notes) ? dish.notes : [];
+    const firstConflict = conflicts[0]?.explanation;
+    const firstNote = notes[0];
+    const rawDishName =
+      dish?.dish_name || dish?.dishName || dish?.DishName || `Dish ${index + 1}`;
+    const name = String(rawDishName).replace(/^Dish Name:\s*/i, "").trim();
+    const description = isSafe
+      ? ingredients.length
+        ? `Detected ingredients: ${ingredients.join(", ")}`
+        : "No ingredients detected"
+      : firstConflict ||
+        firstNote ||
+        (ingredients.length
+          ? `Detected ingredients: ${ingredients.join(", ")}`
+          : "No ingredients detected");
+
+    const dishId =
+      toValidDishId(dish?.dish_id ?? dish?.dishId ?? dish?.DishId) ??
+      storedDishIdByName.get(cleanDishName(name)) ??
+      null;
+
+    return {
+      id: dishId ?? `${payload?.menuId || "menu"}-${index}`,
+      dishId,
+      name,
+      description,
+      category: safetyLevel || "UNKNOWN",
+      displayLevel,
+      allergens: ingredients,
+      diseases: buildDetectedDiseases(dish),
+      warnings: buildDishWarnings(dish),
+      isSafe,
+      isUnsafe,
+      hasWarning,
+      status: isSafe ? "safe" : isUnsafe ? "unsafe" : "warning",
+    };
+  });
 }
 
 function getRecommendation(status) {
   if (status === "safe") {
     return "This item appears compatible with your profile based on the detected ingredients and allergen signals.";
   }
+
   if (status === "warning") {
-    return "This item may still be suitable, but you should confirm ingredients or preparation details with the restaurant before ordering.";
+    return "This item needs extra attention, so confirm ingredients or preparation details with the restaurant before ordering.";
   }
+
   return "This item is not recommended for your profile due to strong allergen or dietary risk indicators.";
 }
 
@@ -141,6 +238,56 @@ function formatPickedFile(file, fallbackType) {
   };
 }
 
+async function normalizePickedPdf(file) {
+  if (!file?.uri) return file;
+  if (Platform.OS !== "android") return file;
+
+  try {
+    const copied = await keepLocalCopy({
+      destination: "cachesDirectory",
+      files: [
+        {
+          uri: file.uri,
+          fileName: file.name || "menu-upload.pdf",
+        },
+      ],
+    });
+
+    const localCopy = copied?.[0];
+
+    if (localCopy?.status === "success" && localCopy.localUri) {
+      return {
+        ...file,
+        uri: localCopy.localUri,
+      };
+    }
+  } catch {
+    return file;
+  }
+
+  return file;
+}
+
+function formatImagePickerAsset(asset, fallbackType, source = "library") {
+  const preferredUri = asset?.uri;
+  const safeName =
+    asset?.fileName ||
+    (source === "camera" ? `camera-menu-${Date.now()}.jpg` : `menu-${Date.now()}.jpg`);
+  const safeType =
+    asset?.type ||
+    (source === "camera" ? "image/jpeg" : "application/octet-stream");
+
+  return formatPickedFile(
+    {
+      name: safeName,
+      size: asset?.fileSize,
+      type: safeType,
+      uri: preferredUri,
+    },
+    fallbackType
+  );
+}
+
 export default function MenuUploadScreen({ navigation }) {
   const [restaurantName, setRestaurantName] = useState("");
   const [file, setFile] = useState(null);
@@ -149,22 +296,26 @@ export default function MenuUploadScreen({ navigation }) {
   const [results, setResults] = useState([]);
   const [reportDish, setReportDish] = useState(null);
   const [reportMessage, setReportMessage] = useState("");
+  const [analysisSummary, setAnalysisSummary] = useState("");
 
-  const safeDishes = results.filter((dish) => dish.status === "safe");
-  const warningDishes = results.filter((dish) => dish.status === "warning");
-  const unsafeDishes = results.filter((dish) => dish.status === "unsafe");
+  const safeDishes = results.filter((dish) => dish.isSafe);
+  const warningDishes = results.filter(
+    (dish) => dish.hasWarning || dish.category === "CAUTION"
+  );
+  const unsafeDishes = results.filter((dish) => dish.isUnsafe);
 
   const safeCount = safeDishes.length;
   const warningCount = warningDishes.length;
   const unsafeCount = unsafeDishes.length;
 
   const totalItems = results.length;
-  const safePercent = totalItems > 0 ? Math.round((safeCount / totalItems) * 100) : 0;
+  const safePercent =
+    totalItems > 0 ? Math.round((safeCount / totalItems) * 100) : 0;
 
   async function openUploadOptions() {
     try {
       const result = await pick({
-        type: [documentTypes.images, documentTypes.pdf],
+        type: [documentTypes.pdf],
         presentationStyle: "fullScreen",
       });
 
@@ -174,7 +325,20 @@ export default function MenuUploadScreen({ navigation }) {
         return;
       }
 
-      setFile(formatPickedFile(selected, "Image"));
+      const normalizedPdf = await normalizePickedPdf(selected);
+      setFile(
+        formatPickedFile(
+          {
+            ...normalizedPdf,
+            name: normalizedPdf?.name || selected?.name || "menu-upload.pdf",
+            type:
+              normalizedPdf?.type ||
+              selected?.type ||
+              "application/pdf",
+          },
+          "PDF"
+        )
+      );
     } catch (err) {
       if (
         isDocumentErrorWithCode(err) &&
@@ -183,7 +347,45 @@ export default function MenuUploadScreen({ navigation }) {
         return;
       }
 
-      Alert.alert("Upload Error", "Could not open the file picker.");
+      Alert.alert(
+        "Upload Error",
+        err?.message || "Could not open the PDF picker."
+      );
+    }
+  }
+
+  async function handlePhotoLibrarySelect() {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: "photo",
+        selectionLimit: 1,
+        quality: 0.82,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        includeBase64: false,
+        assetRepresentationMode: "current",
+      });
+
+      if (result.didCancel) return;
+
+      if (result.errorCode) {
+        Alert.alert(
+          "Upload Error",
+          result.errorMessage || "Could not open the photo library."
+        );
+        return;
+      }
+
+      const asset = result.assets?.[0];
+
+      if (!asset?.uri) {
+        Alert.alert("Upload Error", "No photo was selected.");
+        return;
+      }
+
+      setFile(formatImagePickerAsset(asset, "Image", "library"));
+    } catch {
+      Alert.alert("Upload Error", "Could not open the photo library.");
     }
   }
 
@@ -213,7 +415,12 @@ export default function MenuUploadScreen({ navigation }) {
         mediaType: "photo",
         cameraType: "back",
         saveToPhotos: false,
-        quality: 0.8,
+        quality: 1,
+        maxWidth: 2400,
+        maxHeight: 2400,
+        includeBase64: false,
+        assetRepresentationMode: "current",
+        conversionQuality: 1,
       });
 
       if (result.didCancel) return;
@@ -233,23 +440,13 @@ export default function MenuUploadScreen({ navigation }) {
         return;
       }
 
-      setFile(
-        formatPickedFile(
-          {
-            name: asset.fileName,
-            size: asset.fileSize,
-            type: asset.type,
-            uri: asset.uri,
-          },
-          "Camera Photo"
-        )
-      );
+      setFile(formatImagePickerAsset(asset, "Camera Photo", "camera"));
     } catch {
       Alert.alert("Camera Error", "Could not open the camera.");
     }
   }
 
-  function handleAnalyze() {
+  async function handleAnalyze() {
     if (!restaurantName.trim()) {
       Alert.alert("Missing Restaurant", "Please enter the restaurant name.");
       return;
@@ -262,12 +459,46 @@ export default function MenuUploadScreen({ navigation }) {
 
     setIsAnalyzing(true);
 
-    setTimeout(() => {
-      setResults(mockResults);
+    try {
+      const response = await uploadMenu({
+        file,
+        restaurantName: restaurantName.trim(),
+      });
+
+      const mappedResults = mapUploadResponseToResults(response);
+      const aiResult = response?.aiResult || {};
+      const summaryText =
+        aiResult?.summary?.short_summary ||
+        aiResult?.summary?.shortSummary ||
+        response?.summary?.short_summary ||
+        response?.summary?.shortSummary ||
+        "";
+
+      setResults(mappedResults);
+      setAnalysisSummary(String(summaryText).trim());
       setIsAnalyzing(false);
       setViewMode("results");
       Alert.alert("Analysis Complete", "Your menu safety report is ready.");
-    }, 2000);
+    } catch (err) {
+      setIsAnalyzing(false);
+      const isNetworkError =
+        !err?.response &&
+        String(err?.message || "")
+          .toLowerCase()
+          .includes("network error");
+
+      Alert.alert(
+        "Upload Error",
+        (isNetworkError
+          ? "Could not analyze this file right now. Please try again, or use Choose Photo for the most reliable result."
+          : null) ||
+          err?.response?.data?.message ||
+          err?.response?.data?.title ||
+          (typeof err?.response?.data === "string" ? err.response.data : null) ||
+          err?.message ||
+          "Could not analyze this menu."
+      );
+    }
   }
 
   function resetToUpload() {
@@ -277,18 +508,39 @@ export default function MenuUploadScreen({ navigation }) {
     setRestaurantName("");
     setReportDish(null);
     setReportMessage("");
+    setAnalysisSummary("");
   }
 
-  function submitReport() {
+  async function submitReport() {
     if (!reportMessage.trim()) {
       Alert.alert("Missing Message", "Please type your feedback.");
       return;
     }
 
-    Alert.alert("Thank You", "Your report has been submitted.");
-    setReportMessage("");
-    setReportDish(null);
-    setViewMode("results");
+    if (!reportDish?.dishId) {
+      Alert.alert("Missing Dish", "This dish does not have a valid dish id for reporting.");
+      return;
+    }
+
+    try {
+      await submitDishFeedback({
+        dishID: Number(reportDish.dishId),
+        message: reportMessage.trim(),
+      });
+      Alert.alert("Thank You", "Your report has been submitted.");
+      setReportMessage("");
+      setReportDish(null);
+      setViewMode("results");
+    } catch (err) {
+      Alert.alert(
+        "Report Error",
+        err?.response?.data?.message ||
+          err?.response?.data?.title ||
+          (typeof err?.response?.data === "string" ? err.response.data : null) ||
+          err?.message ||
+          "Could not submit your report."
+      );
+    }
   }
 
   function renderBottomNav(active) {
@@ -354,6 +606,69 @@ export default function MenuUploadScreen({ navigation }) {
         ? styles.dishStatusBadgeTextWarning
         : styles.dishStatusBadgeTextUnsafe;
 
+    const reportLinkStyle =
+      dish.status === "safe"
+        ? styles.reportLinkSafe
+        : dish.status === "warning"
+        ? styles.reportLinkRisky
+        : styles.reportLinkUnsafe;
+
+    const recommendationBoxStyle =
+      dish.status === "safe"
+        ? styles.recommendationBoxSafe
+        : dish.status === "warning"
+        ? styles.recommendationBoxRisky
+        : styles.recommendationBoxUnsafe;
+
+    const recommendationTextStyle =
+      dish.status === "safe"
+        ? styles.recommendationTextSafe
+        : dish.status === "warning"
+        ? styles.recommendationTextRisky
+        : styles.recommendationTextUnsafe;
+
+    const warningChipStyle =
+      dish.status === "safe"
+        ? styles.warningChipSafe
+        : dish.status === "warning"
+        ? styles.warningChipRisky
+        : styles.warningChipUnsafe;
+
+    const warningChipTextStyle =
+      dish.status === "safe"
+        ? styles.warningChipTextSafe
+        : dish.status === "warning"
+        ? styles.warningChipTextRisky
+        : styles.warningChipTextUnsafe;
+
+    const ingredientChipStyle =
+      dish.status === "safe"
+        ? styles.allergenChipSafe
+        : dish.status === "warning"
+        ? styles.allergenChipRisky
+        : styles.allergenChipUnsafe;
+
+    const ingredientChipTextStyle =
+      dish.status === "safe"
+        ? styles.allergenChipTextSafe
+        : dish.status === "warning"
+        ? styles.allergenChipTextRisky
+        : styles.allergenChipTextUnsafe;
+
+    const diseaseChipStyle =
+      dish.status === "safe"
+        ? styles.diseaseChipSafe
+        : dish.status === "warning"
+        ? styles.diseaseChipRisky
+        : styles.diseaseChipUnsafe;
+
+    const diseaseChipTextStyle =
+      dish.status === "safe"
+        ? styles.diseaseChipTextSafe
+        : dish.status === "warning"
+        ? styles.diseaseChipTextRisky
+        : styles.diseaseChipTextUnsafe;
+
     return (
       <View
         key={dish.id}
@@ -373,25 +688,42 @@ export default function MenuUploadScreen({ navigation }) {
           <Text style={badgeTextStyle}>{badgeLabel}</Text>
         </View>
 
-        <Text style={styles.dishDescription}>{dish.description}</Text>
-
-        <View style={styles.recommendationBox}>
-          <Text style={styles.recommendationText}>
+        <View style={[styles.recommendationBox, recommendationBoxStyle]}>
+          <Text style={[styles.recommendationText, recommendationTextStyle]}>
             {getRecommendation(dish.status)}
           </Text>
         </View>
 
-        <View style={styles.categoryChip}>
-          <Text style={styles.categoryChipText}>{dish.category}</Text>
-        </View>
-
         {dish.allergens.length > 0 && (
           <View>
-            <Text style={styles.blockTitle}>Detected allergens</Text>
+            <Text style={styles.blockTitle}>Detected ingredients</Text>
             <View style={styles.chipsWrap}>
               {dish.allergens.map((allergen) => (
-                <View key={`${dish.id}-${allergen}`} style={styles.allergenChip}>
-                  <Text style={styles.allergenChipText}>{allergen}</Text>
+                <View
+                  key={`${dish.id}-${allergen}`}
+                  style={[styles.allergenChip, ingredientChipStyle]}
+                >
+                  <Text style={[styles.allergenChipText, ingredientChipTextStyle]}>
+                    {allergen}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {dish.diseases.length > 0 && (
+          <View>
+            <Text style={styles.blockTitle}>Detected diseases</Text>
+            <View style={styles.chipsWrap}>
+              {dish.diseases.map((disease) => (
+                <View
+                  key={`${dish.id}-${disease}`}
+                  style={[styles.diseaseChip, diseaseChipStyle]}
+                >
+                  <Text style={[styles.diseaseChipText, diseaseChipTextStyle]}>
+                    {disease}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -403,8 +735,10 @@ export default function MenuUploadScreen({ navigation }) {
             <Text style={[styles.blockTitle, styles.warningTitle]}>Warnings</Text>
             <View style={styles.chipsWrap}>
               {dish.warnings.map((warning) => (
-                <View key={`${dish.id}-${warning}`} style={styles.warningChip}>
-                  <Text style={styles.warningChipText}>{warning}</Text>
+                <View key={`${dish.id}-${warning}`} style={[styles.warningChip, warningChipStyle]}>
+                  <Text style={[styles.warningChipText, warningChipTextStyle]}>
+                    {warning}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -414,11 +748,17 @@ export default function MenuUploadScreen({ navigation }) {
         <View style={styles.reportWrap}>
           <Pressable
             onPress={() => {
-              setReportDish(dish.name);
+              setReportDish({
+                dishId: dish.dishId,
+                name: dish.name,
+                status: dish.status,
+              });
               setViewMode("report");
             }}
           >
-            <Text style={styles.reportLink}>Report incorrect detection</Text>
+            <Text style={[styles.reportLink, reportLinkStyle]}>
+              Report incorrect detection
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -434,7 +774,7 @@ export default function MenuUploadScreen({ navigation }) {
             <Text style={styles.headerTitle}>Report Issue</Text>
             <Text style={styles.headerSubtitle}>
               Tell us what is wrong with{" "}
-              <Text style={styles.highlightText}>{reportDish}</Text>.
+              <Text style={styles.highlightText}>{reportDish.name}</Text>.
             </Text>
           </View>
 
@@ -513,17 +853,17 @@ export default function MenuUploadScreen({ navigation }) {
               <View style={styles.insightRow}>
                 <View style={styles.insightPill}>
                   <Text style={styles.insightValueSafe}>{safeCount}</Text>
-                  <Text style={styles.insightText}>Best picks</Text>
+                  <Text style={styles.insightText}>Safe</Text>
                 </View>
 
                 <View style={styles.insightPill}>
                   <Text style={styles.insightValueWarning}>{warningCount}</Text>
-                  <Text style={styles.insightText}>Use caution</Text>
+                  <Text style={styles.insightText}>Risky</Text>
                 </View>
 
                 <View style={[styles.insightPill, styles.insightPillLast]}>
                   <Text style={styles.insightValueUnsafe}>{unsafeCount}</Text>
-                  <Text style={styles.insightText}>Avoid</Text>
+                  <Text style={styles.insightText}>Unsafe</Text>
                 </View>
               </View>
             </View>
@@ -535,8 +875,8 @@ export default function MenuUploadScreen({ navigation }) {
               <View style={styles.safetyTextWrap}>
                 <Text style={styles.safetyTitle}>Safety Summary</Text>
                 <Text style={styles.safetyDescription}>
-                  {safePercent}% of detected menu items are considered safer for your
-                  profile based on the current analysis.
+                  {analysisSummary ||
+                    `${safePercent}% of detected menu items are considered safer for your profile based on the current analysis.`}
                 </Text>
               </View>
             </View>
@@ -544,7 +884,7 @@ export default function MenuUploadScreen({ navigation }) {
             {safeDishes.length > 0 && (
               <View style={styles.sectionGroup}>
                 <View style={styles.sectionGroupHeader}>
-                  <Text style={styles.sectionGroupTitle}>Best Picks</Text>
+                  <Text style={styles.sectionGroupTitle}>Safe</Text>
                   <Text style={styles.sectionGroupCount}>
                     {safeDishes.length} items
                   </Text>
@@ -556,7 +896,7 @@ export default function MenuUploadScreen({ navigation }) {
             {warningDishes.length > 0 && (
               <View style={styles.sectionGroup}>
                 <View style={styles.sectionGroupHeader}>
-                  <Text style={styles.sectionGroupTitle}>Use Caution</Text>
+                  <Text style={styles.sectionGroupTitle}>Risky</Text>
                   <Text style={styles.sectionGroupCount}>
                     {warningDishes.length} items
                   </Text>
@@ -568,7 +908,7 @@ export default function MenuUploadScreen({ navigation }) {
             {unsafeDishes.length > 0 && (
               <View style={styles.sectionGroup}>
                 <View style={styles.sectionGroupHeader}>
-                  <Text style={styles.sectionGroupTitle}>Avoid</Text>
+                  <Text style={styles.sectionGroupTitle}>Unsafe</Text>
                   <Text style={styles.sectionGroupCount}>
                     {unsafeDishes.length} items
                   </Text>
@@ -597,7 +937,10 @@ export default function MenuUploadScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <FancyBackButton onPress={() => navigation.navigate("UserDashboard")} label="Back" />
+          <FancyBackButton
+            onPress={() => navigation.navigate("UserDashboard")}
+            label="Back"
+          />
           <Text style={styles.headerTitle}>Upload Menu</Text>
           <Text style={styles.headerSubtitle}>
             Take a photo or upload a PDF to analyze
@@ -630,8 +973,8 @@ export default function MenuUploadScreen({ navigation }) {
                     <Icon name="upload" size={28} color="#1DB954" solid />
                   </View>
                   <Text style={styles.uploadTitle}>Upload Menu</Text>
-                  <Text style={styles.uploadSub}>Tap to choose a photo or PDF</Text>
-                  <Text style={styles.uploadTiny}>PNG, JPG or PDF (max 10MB)</Text>
+                  <Text style={styles.uploadSub}>Tap to choose a PDF</Text>
+                  <Text style={styles.uploadTiny}>PDF only here. Use photo buttons below for images.</Text>
                 </View>
               </Pressable>
 
@@ -640,6 +983,16 @@ export default function MenuUploadScreen({ navigation }) {
                 <Text style={styles.dividerText}>or</Text>
                 <View style={styles.dividerLine} />
               </View>
+
+              <Pressable style={styles.actionRowCard} onPress={handlePhotoLibrarySelect}>
+                <View style={styles.actionIconBox}>
+                  <Icon name="image" size={20} color="#1DB954" solid />
+                </View>
+                <View style={styles.actionBody}>
+                  <Text style={styles.actionTitle}>Choose Photo</Text>
+                  <Text style={styles.actionSub}>Gallery image analysis</Text>
+                </View>
+              </Pressable>
 
               <Pressable style={styles.actionRowCard} onPress={handleCameraSelect}>
                 <View style={styles.actionIconBox}>

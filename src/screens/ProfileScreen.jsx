@@ -16,7 +16,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/FontAwesome6";
 import LinearGradient from "react-native-linear-gradient";
 import {
-  deactivateAccount,
   getAllergies,
   getDiseases,
   getUserProfile,
@@ -27,6 +26,7 @@ import {
   deleteUserDisease,
   updateUserProfile,
 } from "../api/user";
+import { deactivateAccount, logout } from "../api/auth";
 import FancyBackButton from "../components/common/FancyBackButton";
 import styles from "./ProfileScreen.styles";
 
@@ -57,7 +57,7 @@ const UI_ICONS = {
   home: "house",
   upload: "upload",
   user: "user",
-  check: "circle-check",
+  check: "check",
   circle: "circle",
   close: "xmark",
 };
@@ -101,6 +101,11 @@ function hasId(list, id) {
   return Array.isArray(list) && list.some((x) => String(x) === key);
 }
 
+function getNextAvailableOptionId(options, selectedIds, fallbackId = null) {
+  const nextOption = options.find((item) => !hasId(selectedIds, item.id));
+  return nextOption?.id ?? fallbackId;
+}
+
 function getApiErrorMessage(err, fallback) {
   const responseData = err?.response?.data;
   if (!responseData) return fallback;
@@ -108,6 +113,10 @@ function getApiErrorMessage(err, fallback) {
   if (typeof responseData?.message === "string") return responseData.message;
   if (typeof responseData?.title === "string") return responseData.title;
   return fallback;
+}
+
+function isUnauthorizedError(err) {
+  return Number(err?.response?.status) === 401;
 }
 
 function SelectModal({ visible, title, options, onSelect, onClose, selectedId }) {
@@ -181,7 +190,7 @@ export default function ProfileScreen({ navigation }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  const deleteOk = deleteConfirmText.trim().toUpperCase() === "DELETE";
+  const deleteOk = deleteConfirmText.trim() === "DELETE";
 
   const displayGender = useMemo(() => {
     const code = Number(profile?.gender ?? editProfile?.gender);
@@ -196,6 +205,18 @@ export default function ProfileScreen({ navigation }) {
   }, [profile]);
 
   const displaySub = useMemo(() => profile?.email || "Manage your account", [profile?.email]);
+  const displayedHealthAllergies = useMemo(() => {
+    if (healthAllergyIds.length > 0) {
+      return healthAllergyIds.map((id) => getNameById(allergyOptions, id));
+    }
+    return healthAllergyNames;
+  }, [allergyOptions, healthAllergyIds, healthAllergyNames]);
+  const displayedHealthDiseases = useMemo(() => {
+    if (healthDiseaseIds.length > 0) {
+      return healthDiseaseIds.map((id) => getNameById(diseaseOptions, id));
+    }
+    return healthDiseaseNames;
+  }, [diseaseOptions, healthDiseaseIds, healthDiseaseNames]);
 
   const onBack = () => {
     if (viewMode !== "main") {
@@ -221,14 +242,24 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const openEditHealth = () => {
-    setPendingAllergyId(healthAllergyIds[0] || allergyOptions[0]?.id || null);
-    setPendingDiseaseId(healthDiseaseIds[0] || diseaseOptions[0]?.id || null);
+    setPendingAllergyId(getNextAvailableOptionId(allergyOptions, healthAllergyIds, allergyOptions[0]?.id || null));
+    setPendingDiseaseId(getNextAvailableOptionId(diseaseOptions, healthDiseaseIds, diseaseOptions[0]?.id || null));
     setViewMode("editHealth");
   };
 
+  const resetSessionAndGoToLogin = useCallback(async () => {
+    await AsyncStorage.multiRemove(["token", "role", "userId"]);
+    navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+  }, [navigation]);
+
+  const handleUnauthorized = useCallback(async () => {
+    await resetSessionAndGoToLogin();
+    Alert.alert("Session Expired", "Please log in again.");
+  }, [resetSessionAndGoToLogin]);
+
   const loadData = useCallback(async () => {
     try {
-      if (!profile) setLoading(true);
+      setLoading(true);
 
       const storedUserId = await AsyncStorage.getItem("userId");
       if (!storedUserId) {
@@ -256,14 +287,18 @@ export default function ProfileScreen({ navigation }) {
       setDiseaseOptions(diseases);
 
       setProfile(profileData);
-      setEditProfile({
-        firstName: profileData?.firstName || "",
-        lastName: profileData?.lastName || "",
-        email: profileData?.email || "",
-        phone: profileData?.phone || "",
-        dateOfBirth: toDateInput(profileData?.dateOfBirth),
-        gender: Number(profileData?.gender) === 2 ? 2 : 1,
-      });
+      setEditProfile((current) =>
+        viewMode === "editPersonal" && current
+          ? current
+          : {
+              firstName: profileData?.firstName || "",
+              lastName: profileData?.lastName || "",
+              email: profileData?.email || "",
+              phone: profileData?.phone || "",
+              dateOfBirth: toDateInput(profileData?.dateOfBirth),
+              gender: Number(profileData?.gender) === 2 ? 2 : 1,
+            }
+      );
 
       const summary = await getUserHealthSummary(canonicalUserId);
       const summaryData = summary?.data || summary;
@@ -282,15 +317,24 @@ export default function ProfileScreen({ navigation }) {
       setHealthAllergyIds(allergyIds);
       setHealthDiseaseIds(diseaseIds);
 
-      setPendingAllergyId(allergyIds[0] || allergies[0]?.id || null);
-      setPendingDiseaseId(diseaseIds[0] || diseases[0]?.id || null);
+      setPendingAllergyId((currentId) => {
+        if (currentId && !hasId(allergyIds, currentId)) return currentId;
+        return getNextAvailableOptionId(allergies, allergyIds, allergies[0]?.id || null);
+      });
+      setPendingDiseaseId((currentId) => {
+        if (currentId && !hasId(diseaseIds, currentId)) return currentId;
+        return getNextAvailableOptionId(diseases, diseaseIds, diseases[0]?.id || null);
+      });
     } catch (err) {
-      console.error("loadData error:", err?.response?.data || err);
+      if (isUnauthorizedError(err)) {
+        await handleUnauthorized();
+        return;
+      }
       Alert.alert("Error", "Failed to load profile information.");
     } finally {
       setLoading(false);
     }
-  }, [navigation, profile]);
+  }, [handleUnauthorized, navigation, viewMode]);
 
   useFocusEffect(
     useCallback(() => {
@@ -308,10 +352,17 @@ export default function ProfileScreen({ navigation }) {
 
     try {
       setSaving(true);
-      await addUserAllergies(userId, { userId, allergyIds: [pendingAllergyId] });
-      await loadData();
+      const nextIds = [...healthAllergyIds, pendingAllergyId];
+      await addUserAllergies(Number(userId), { userId: Number(userId), allergyIds: [Number(pendingAllergyId)] });
+      setHealthAllergyIds(nextIds);
+      setHealthAllergyNames(nextIds.map((id) => getNameById(allergyOptions, id)));
+      setPendingAllergyId(getNextAvailableOptionId(allergyOptions, nextIds, pendingAllergyId));
       Alert.alert("Success", "Allergen added.");
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await handleUnauthorized();
+        return;
+      }
       Alert.alert("Error", getApiErrorMessage(err, "Could not add allergen."));
     } finally {
       setSaving(false);
@@ -328,10 +379,17 @@ export default function ProfileScreen({ navigation }) {
 
     try {
       setSaving(true);
-      await addUserDiseases(userId, { userId, diseaseIds: [pendingDiseaseId] });
-      await loadData();
+      const nextIds = [...healthDiseaseIds, pendingDiseaseId];
+      await addUserDiseases(Number(userId), { userId: Number(userId), diseaseIds: [Number(pendingDiseaseId)] });
+      setHealthDiseaseIds(nextIds);
+      setHealthDiseaseNames(nextIds.map((id) => getNameById(diseaseOptions, id)));
+      setPendingDiseaseId(getNextAvailableOptionId(diseaseOptions, nextIds, pendingDiseaseId));
       Alert.alert("Success", "Condition added.");
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await handleUnauthorized();
+        return;
+      }
       Alert.alert("Error", getApiErrorMessage(err, "Could not add condition."));
     } finally {
       setSaving(false);
@@ -343,9 +401,20 @@ export default function ProfileScreen({ navigation }) {
 
     try {
       setSaving(true);
-      await deleteUserAllergy(userId, allergyId);
-      await loadData();
+      await deleteUserAllergy(Number(userId), Number(allergyId));
+      const nextIds = healthAllergyIds.filter((id) => String(id) !== String(allergyId));
+      setHealthAllergyIds(nextIds);
+      setHealthAllergyNames(nextIds.map((id) => getNameById(allergyOptions, id)));
+      setPendingAllergyId((currentId) => {
+        if (currentId && !hasId(nextIds, currentId)) return currentId;
+        return getNextAvailableOptionId(allergyOptions, nextIds, allergyOptions[0]?.id || null);
+      });
+      Alert.alert("Success", "Allergy removed from your health profile.");
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await handleUnauthorized();
+        return;
+      }
       Alert.alert("Error", getApiErrorMessage(err, "Could not delete allergy."));
     } finally {
       setSaving(false);
@@ -357,9 +426,20 @@ export default function ProfileScreen({ navigation }) {
 
     try {
       setSaving(true);
-      await deleteUserDisease(userId, diseaseId);
-      await loadData();
+      await deleteUserDisease(Number(userId), Number(diseaseId));
+      const nextIds = healthDiseaseIds.filter((id) => String(id) !== String(diseaseId));
+      setHealthDiseaseIds(nextIds);
+      setHealthDiseaseNames(nextIds.map((id) => getNameById(diseaseOptions, id)));
+      setPendingDiseaseId((currentId) => {
+        if (currentId && !hasId(nextIds, currentId)) return currentId;
+        return getNextAvailableOptionId(diseaseOptions, nextIds, diseaseOptions[0]?.id || null);
+      });
+      Alert.alert("Success", "Condition removed from your health profile.");
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await handleUnauthorized();
+        return;
+      }
       Alert.alert("Error", getApiErrorMessage(err, "Could not delete disease."));
     } finally {
       setSaving(false);
@@ -372,8 +452,8 @@ export default function ProfileScreen({ navigation }) {
     try {
       setSaving(true);
 
-      await updateUserProfile(userId, {
-        userId,
+      await updateUserProfile(Number(userId), {
+        userId: Number(userId),
         firstName: String(editProfile.firstName || "").trim(),
         lastName: String(editProfile.lastName || "").trim(),
         phone: String(editProfile.phone || "").trim(),
@@ -381,10 +461,21 @@ export default function ProfileScreen({ navigation }) {
         gender: Number(editProfile.gender) === 2 ? 2 : 1,
       });
 
-      await loadData();
+      setProfile((current) => ({
+        ...current,
+        firstName: String(editProfile.firstName || "").trim(),
+        lastName: String(editProfile.lastName || "").trim(),
+        phone: String(editProfile.phone || "").trim(),
+        dateOfBirth: editProfile.dateOfBirth,
+        gender: Number(editProfile.gender) === 2 ? 2 : 1,
+      }));
       setViewMode("main");
       Alert.alert("Success", "Personal information updated successfully.");
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await handleUnauthorized();
+        return;
+      }
       Alert.alert("Error", getApiErrorMessage(err, "Could not update personal information."));
     } finally {
       setSaving(false);
@@ -396,19 +487,32 @@ export default function ProfileScreen({ navigation }) {
 
     try {
       setSaving(true);
-      await deactivateAccount({ userId });
+      await deactivateAccount({ userId: Number(userId) });
       await AsyncStorage.multiRemove(["token", "role", "userId"]);
       setShowDeleteDialog(false);
       navigation.reset({ index: 0, routes: [{ name: "Login" }] });
       Alert.alert("Done", "Account deleted successfully.");
-    } catch {
-      Alert.alert("Error", "Could not delete your account.");
+    } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await handleUnauthorized();
+        return;
+      }
+      Alert.alert("Error", getApiErrorMessage(err, "Could not delete your account."));
     } finally {
       setSaving(false);
     }
   }
 
   async function onLogout() {
+    try {
+      await logout();
+    } catch (err) {
+      if (!isUnauthorizedError(err)) {
+        Alert.alert("Error", getApiErrorMessage(err, "Could not log out right now."));
+        return;
+      }
+    }
+
     await AsyncStorage.multiRemove(["token", "role", "userId"]);
     navigation.reset({ index: 0, routes: [{ name: "Login" }] });
   }
@@ -474,8 +578,8 @@ export default function ProfileScreen({ navigation }) {
 
                 <Text style={styles.healthLabel}>Allergies</Text>
                 <View style={styles.chipsWrap}>
-                  {healthAllergyNames.length > 0 ? (
-                    healthAllergyNames.map((name) => (
+                  {displayedHealthAllergies.length > 0 ? (
+                    displayedHealthAllergies.map((name) => (
                       <View key={`main-allergy-${name}`} style={styles.chipDanger}>
                         <Text style={styles.chipDangerText}>{name}</Text>
                       </View>
@@ -487,8 +591,8 @@ export default function ProfileScreen({ navigation }) {
 
                 <Text style={[styles.healthLabel, styles.healthLabelSecond]}>Chronic Conditions</Text>
                 <View style={styles.chipsWrap}>
-                  {healthDiseaseNames.length > 0 ? (
-                    healthDiseaseNames.map((name) => (
+                  {displayedHealthDiseases.length > 0 ? (
+                    displayedHealthDiseases.map((name) => (
                       <View key={`main-disease-${name}`} style={styles.chipWarn}>
                         <Text style={styles.chipWarnText}>{name}</Text>
                       </View>
@@ -563,7 +667,19 @@ export default function ProfileScreen({ navigation }) {
                   {healthAllergyIds.map((id) => (
                     <View key={`a-${id}`} style={styles.chipDanger}>
                       <Text style={styles.chipDangerText}>{getNameById(allergyOptions, id)}</Text>
-                      <TouchableOpacity onPress={() => onDeleteAllergy(id)} disabled={saving}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          Alert.alert(
+                            "Remove Allergy",
+                            `Remove ${getNameById(allergyOptions, id)} from your profile?`,
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              { text: "Remove", style: "destructive", onPress: () => onDeleteAllergy(id) },
+                            ]
+                          )
+                        }
+                        disabled={saving}
+                      >
                         <Icon name={UI_ICONS.remove} size={12} color="#F87171" solid />
                       </TouchableOpacity>
                     </View>
@@ -592,7 +708,19 @@ export default function ProfileScreen({ navigation }) {
                   {healthDiseaseIds.map((id) => (
                     <View key={`d-${id}`} style={styles.chipWarn}>
                       <Text style={styles.chipWarnText}>{getNameById(diseaseOptions, id)}</Text>
-                      <TouchableOpacity onPress={() => onDeleteDisease(id)} disabled={saving}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          Alert.alert(
+                            "Remove Condition",
+                            `Remove ${getNameById(diseaseOptions, id)} from your profile?`,
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              { text: "Remove", style: "destructive", onPress: () => onDeleteDisease(id) },
+                            ]
+                          )
+                        }
+                        disabled={saving}
+                      >
                         <Icon name={UI_ICONS.remove} size={12} color="#FACC15" solid />
                       </TouchableOpacity>
                     </View>
@@ -605,6 +733,7 @@ export default function ProfileScreen({ navigation }) {
           {viewMode === "editPersonal" && editProfile && (
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               <View style={styles.card}>
+                <Text style={styles.editHint}>You can edit your personal information below and save when you are ready.</Text>
                 <Text style={styles.inputLabel}>First Name</Text>
                 <TextInput
                   value={editProfile.firstName}
@@ -612,6 +741,7 @@ export default function ProfileScreen({ navigation }) {
                   style={styles.input}
                   placeholder="First name"
                   placeholderTextColor="#6B7280"
+                  editable={!saving}
                 />
 
                 <Text style={styles.inputLabel}>Last Name</Text>
@@ -621,6 +751,7 @@ export default function ProfileScreen({ navigation }) {
                   style={styles.input}
                   placeholder="Last name"
                   placeholderTextColor="#6B7280"
+                  editable={!saving}
                 />
 
                 <Text style={styles.inputLabel}>Email</Text>
@@ -634,6 +765,7 @@ export default function ProfileScreen({ navigation }) {
                   placeholder="Phone"
                   placeholderTextColor="#6B7280"
                   keyboardType="phone-pad"
+                  editable={!saving}
                 />
 
                 <Text style={styles.inputLabel}>Date of Birth</Text>
@@ -643,6 +775,7 @@ export default function ProfileScreen({ navigation }) {
                   style={styles.input}
                   placeholder="YYYY-MM-DD"
                   placeholderTextColor="#6B7280"
+                  editable={!saving}
                 />
 
                 <Text style={styles.inputLabel}>Gender</Text>

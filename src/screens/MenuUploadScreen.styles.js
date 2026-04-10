@@ -157,14 +157,19 @@ const styles = StyleSheet.create({
   },
 
   actionRowCard: {
-    backgroundColor: "#121212",
+    backgroundColor: "#101514",
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: "#22322A",
     borderRadius: 16,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 14,
+    shadowColor: "#000000",
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
 
   actionIconBox: {
@@ -182,14 +187,14 @@ const styles = StyleSheet.create({
   },
 
   actionTitle: {
-    color: "#FFFFFF",
+    color: "#F3F4F6",
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 4,
   },
 
   actionSub: {
-    color: "#9CA3AF",
+    color: "#98B5A5",
     fontSize: 13,
   },
 
@@ -472,9 +477,10 @@ const styles = StyleSheet.create({
   },
 
   sectionGroupTitle: {
-    color: "#FFFFFF",
+    color: "#F9FAFB",
     fontSize: 18,
     fontWeight: "800",
+    letterSpacing: 0.3,
   },
 
   sectionGroupCount: {
@@ -495,18 +501,18 @@ const styles = StyleSheet.create({
   },
 
   dishCardSafe: {
-    borderColor: "#00E46C",
-    backgroundColor: "rgba(0,48,22,0.45)",
+    borderColor: "#1F9D55",
+    backgroundColor: "#081B12",
   },
 
   dishCardWarning: {
-    borderColor: "#EAB308",
-    backgroundColor: "rgba(46,32,0,0.42)",
+    borderColor: "#D7A31A",
+    backgroundColor: "#1C1507",
   },
 
   dishCardUnsafe: {
-    borderColor: "#EF4444",
-    backgroundColor: "rgba(49,7,11,0.42)",
+    borderColor: "#E05757",
+    backgroundColor: "#1D0A0D",
   },
 
   dishTitleRow: {
@@ -532,15 +538,21 @@ const styles = StyleSheet.create({
   },
 
   dishStatusBadgeSafe: {
-    backgroundColor: "rgba(34,197,94,0.16)",
+    backgroundColor: "#10311F",
+    borderWidth: 1,
+    borderColor: "#245A3A",
   },
 
   dishStatusBadgeWarning: {
-    backgroundColor: "rgba(234,179,8,0.16)",
+    backgroundColor: "#332707",
+    borderWidth: 1,
+    borderColor: "#6D5310",
   },
 
   dishStatusBadgeUnsafe: {
-    backgroundColor: "rgba(239,68,68,0.16)",
+    backgroundColor: "#351114",
+    borderWidth: 1,
+    borderColor: "#6B232A",
   },
 
   dishStatusBadgeTextSafe: {
@@ -574,24 +586,49 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 14,
   },
+  recommendationBoxSafe: {
+    backgroundColor: "#0D2418",
+    borderWidth: 1,
+    borderColor: "#214C34",
+  },
+  recommendationBoxRisky: {
+    backgroundColor: "#241B08",
+    borderWidth: 1,
+    borderColor: "#695116",
+  },
+  recommendationBoxUnsafe: {
+    backgroundColor: "#260E11",
+    borderWidth: 1,
+    borderColor: "#6E2931",
+  },
 
   recommendationText: {
     color: "#E5E7EB",
     fontSize: 13,
     lineHeight: 19,
   },
+  recommendationTextSafe: {
+    color: "#DCFCE7",
+  },
+  recommendationTextRisky: {
+    color: "#FEF3C7",
+  },
+  recommendationTextUnsafe: {
+    color: "#FEE2E2",
+  },
 
   categoryChip: {
     alignSelf: "flex-start",
-    backgroundColor: "#25324A",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    marginBottom: 18,
+    marginRight: 8,
+    marginBottom: 8,
   },
 
   categoryChipText: {
-    color: "#B5C0D1",
+    color: "#E5E7EB",
     fontSize: 11,
     fontWeight: "600",
   },
@@ -614,18 +651,85 @@ const styles = StyleSheet.create({
   },
 
   allergenChip: {
-    backgroundColor: "#7D1C1C",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 5,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
   },
 
   allergenChipText: {
-    color: "#FF7B7B",
     fontSize: 11,
     fontWeight: "700",
+  },
+
+  allergenChipSafe: {
+    backgroundColor: "#102A1D",
+    borderColor: "#245A3A",
+  },
+
+  allergenChipRisky: {
+    backgroundColor: "#2B2109",
+    borderColor: "#7A5B14",
+  },
+
+  allergenChipUnsafe: {
+    backgroundColor: "#341215",
+    borderColor: "#7E2C35",
+  },
+
+  allergenChipTextSafe: {
+    color: "#A7F3D0",
+  },
+
+  allergenChipTextRisky: {
+    color: "#FDE68A",
+  },
+
+  allergenChipTextUnsafe: {
+    color: "#FECACA",
+  },
+
+  diseaseChip: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+
+  diseaseChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  diseaseChipSafe: {
+    backgroundColor: "#0F2B24",
+    borderColor: "#245A4A",
+  },
+
+  diseaseChipRisky: {
+    backgroundColor: "#28200D",
+    borderColor: "#75611D",
+  },
+
+  diseaseChipUnsafe: {
+    backgroundColor: "#2A1318",
+    borderColor: "#70404B",
+  },
+
+  diseaseChipTextSafe: {
+    color: "#99F6E4",
+  },
+
+  diseaseChipTextRisky: {
+    color: "#FDE68A",
+  },
+
+  diseaseChipTextUnsafe: {
+    color: "#FBCFE8",
   },
 
   warningChip: {
@@ -642,6 +746,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
   },
+  warningChipSafe: {
+    backgroundColor: "rgba(34,197,94,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.26)",
+  },
+  warningChipRisky: {
+    backgroundColor: "rgba(250,204,21,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(250,204,21,0.26)",
+  },
+  warningChipUnsafe: {
+    backgroundColor: "rgba(248,113,113,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.26)",
+  },
+  warningChipTextSafe: {
+    color: "#86EFAC",
+  },
+  warningChipTextRisky: {
+    color: "#FACC15",
+  },
+  warningChipTextUnsafe: {
+    color: "#FCA5A5",
+  },
 
   reportWrap: {
     borderTopWidth: 1,
@@ -651,9 +779,17 @@ const styles = StyleSheet.create({
   },
 
   reportLink: {
-    color: GREEN,
     fontSize: 14,
     fontWeight: "600",
+  },
+  reportLinkSafe: {
+    color: "#22C55E",
+  },
+  reportLinkRisky: {
+    color: "#FACC15",
+  },
+  reportLinkUnsafe: {
+    color: "#F87171",
   },
 
   emptyStateCard: {

@@ -209,6 +209,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 4,
   },
+  editHint: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
   input: {
     backgroundColor: "#1A1A1A",
     borderWidth: 1,
