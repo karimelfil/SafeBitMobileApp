@@ -68,9 +68,9 @@ export default StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#0B1220",
+    backgroundColor: "#2A2A2A",
     borderWidth: 1,
-    borderColor: "#2B3445",
+    borderColor: "#4B5563",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -80,9 +80,9 @@ export default StyleSheet.create({
   passwordWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0B1220",
+    backgroundColor: "#2A2A2A",
     borderWidth: 1,
-    borderColor: "#2B3445",
+    borderColor: "#4B5563",
     borderRadius: 8,
   },
   passwordInput: {

@@ -11,48 +11,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/FontAwesome6";
+import { getScanHistory } from "../api/scan";
 import { getUserProfile } from "../api/user";
 import styles from "./UserDashboard.styles";
 
 const logo = require("../../assets/logo.png");
 
-const mockRecentScans = [
-  {
-    id: 1,
-    restaurantName: "Italian Bistro",
-    date: "2025-11-14",
-    safeItems: 8,
-    warningItems: 2,
-    unsafeItems: 1,
-  },
-  {
-    id: 2,
-    restaurantName: "Sushi Paradise",
-    date: "2025-11-13",
-    safeItems: 5,
-    warningItems: 3,
-    unsafeItems: 2,
-  },
-  {
-    id: 3,
-    restaurantName: "Burger House",
-    date: "2025-11-12",
-    safeItems: 12,
-    warningItems: 1,
-    unsafeItems: 0,
-  },
-  {
-    id: 4,
-    restaurantName: "Thai Kitchen",
-    date: "2025-11-10",
-    safeItems: 6,
-    warningItems: 4,
-    unsafeItems: 1,
-  },
-];
-
 export default function UserDashboard({ navigation }) {
   const [firstName, setFirstName] = useState("");
+  const [recentScans, setRecentScans] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,15 +32,24 @@ export default function UserDashboard({ navigation }) {
 
           const profileRes = await getUserProfile(storedUserId);
           const profileData = profileRes?.data || profileRes;
+          const history = await getScanHistory();
+
+          const sortedHistory = Array.isArray(history)
+            ? [...history].sort(
+                (a, b) => new Date(b?.ScanDate || 0).getTime() - new Date(a?.ScanDate || 0).getTime()
+              )
+            : [];
 
           if (active) {
             setFirstName(String(profileData?.firstName || "").trim());
+            setRecentScans(sortedHistory.slice(0, 4));
           }
         } catch (err) {
           if (active) {
             setFirstName("");
+            setRecentScans([]);
             if (err?.response?.status !== 401) {
-              Alert.alert("Error", "Could not load your name.");
+              Alert.alert("Error", "Could not load your dashboard data.");
             }
           }
         }
@@ -142,39 +118,52 @@ export default function UserDashboard({ navigation }) {
             </Pressable>
           </View>
 
-          {mockRecentScans.map((scan) => (
-            <Pressable
-              key={scan.id}
-              style={styles.scanItem}
-              onPress={() => navigation.navigate("History")}
-            >
-              <Text style={styles.scanItemTitle}>{scan.restaurantName}</Text>
+          {recentScans.length === 0 ? (
+            <View style={styles.scanItem}>
+              <Text style={styles.scanItemTitle}>No recent scans yet</Text>
               <Text style={styles.scanItemDate}>
-                {new Date(scan.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                Start scanning menus and your latest results will appear here.
               </Text>
+            </View>
+          ) : (
+            recentScans.map((scan) => (
+              <Pressable
+                key={scan.ScanID}
+                style={styles.scanItem}
+                onPress={() =>
+                  navigation.navigate("History", {
+                    initialScan: scan,
+                  })
+                }
+              >
+                <Text style={styles.scanItemTitle}>{scan.RestaurantName}</Text>
+                <Text style={styles.scanItemDate}>
+                  {new Date(scan.ScanDate).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </Text>
 
-              <View style={styles.badgesRow}>
-                <View style={styles.badgeWrap}>
-                  <View style={[styles.dot, styles.dotSafe]} />
-                  <Text style={styles.badgeText}>{scan.safeItems} Safe</Text>
-                </View>
+                <View style={styles.badgesRow}>
+                  <View style={styles.badgeWrap}>
+                    <View style={[styles.dot, styles.dotSafe]} />
+                    <Text style={styles.badgeText}>{scan.SafeCount} Safe</Text>
+                  </View>
 
-                <View style={styles.badgeWrap}>
-                  <View style={[styles.dot, styles.dotWarn]} />
-                  <Text style={styles.badgeText}>{scan.warningItems} Warning</Text>
-                </View>
+                  <View style={styles.badgeWrap}>
+                    <View style={[styles.dot, styles.dotWarn]} />
+                    <Text style={styles.badgeText}>{scan.RiskyCount} Risky</Text>
+                  </View>
 
-                <View style={styles.badgeWrap}>
-                  <View style={[styles.dot, styles.dotUnsafe]} />
-                  <Text style={styles.badgeText}>{scan.unsafeItems} Unsafe</Text>
+                  <View style={styles.badgeWrap}>
+                    <View style={[styles.dot, styles.dotUnsafe]} />
+                    <Text style={styles.badgeText}>{scan.UnsafeCount} Unsafe</Text>
+                  </View>
                 </View>
-              </View>
-            </Pressable>
-          ))}
+              </Pressable>
+            ))
+          )}
 
           <View style={styles.safetyCard}>
             <Text style={styles.safetyTitle}>Your Safety, Our Priority</Text>
