@@ -616,6 +616,14 @@ const styles = StyleSheet.create({
   recommendationTextUnsafe: {
     color: "#FEE2E2",
   },
+  detailNarrativeLabel: {
+    color: "#F8FAFC",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginBottom: 8,
+  },
 
   categoryChip: {
     alignSelf: "flex-start",

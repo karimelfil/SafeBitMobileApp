@@ -95,3 +95,87 @@ To learn more about React Native, take a look at the following resources:
 - [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
 - [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
 - [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+
+# Expo Development Client and APKs
+
+This project keeps the existing React Native CLI and Android Studio workflow, and also supports Expo Development Client for QR-based testing on a physical Android phone.
+
+## Install dependencies
+
+From the project root:
+
+```sh
+npm install
+```
+
+If you will build for iOS later, install pods after dependency changes:
+
+```sh
+npx pod-install
+```
+
+## Build Android dev client
+
+This builds and installs the Expo Development Client on your Android emulator or connected Android phone:
+
+```sh
+npm run expo:android
+```
+
+You can still use the original React Native CLI flow:
+
+```sh
+npm run android
+```
+
+You can also open the `android/` project in Android Studio and run it there.
+
+## Start Expo Go and scan QR code
+
+Start the Expo Go server in tunnel mode:
+
+```sh
+npm run expo:go
+```
+
+Then:
+
+1. Install `Expo Go` from the Play Store on the phone.
+2. Keep this laptop running while testing.
+3. Scan the QR code from Expo Go or the phone camera.
+4. The project will open directly in Expo Go.
+
+If you want to use the custom native development build instead, you can still run:
+
+```sh
+npm run expo:android
+npm run expo:tunnel
+```
+
+## Generate APK files
+
+Debug APK:
+
+```sh
+npm run apk:debug
+```
+
+Created at:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Release APK:
+
+```sh
+npm run apk:release
+```
+
+Created at:
+
+```text
+android/app/build/outputs/apk/release/app-release.apk
+```
+
+Note: the current Android `release` build type is configured to sign with the debug keystore. Replace that with your own release keystore before distributing a real production build.

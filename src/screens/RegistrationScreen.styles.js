@@ -102,6 +102,7 @@ const styles = StyleSheet.create({
   inputBtnText: { color: "#fff" },
 
   row2: { flexDirection: "row", gap: 12 },
+  rowHalf: { flex: 1 },
 
   genderRow: { flexDirection: "row", gap: 12, marginTop: 6 },
   genderCard: {
@@ -131,6 +132,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  mainBtnDisabled: { opacity: 0.7 },
   mainBtnTxt: { color: "#000", fontWeight: "900", fontSize: 14 },
 
   bottomText: {
@@ -148,6 +150,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 10,
   },
+  qSpaced: { marginTop: 18 },
 
   yesNoRow: { flexDirection: "row", gap: 12 },
   yesNoBtn: {
@@ -198,6 +201,7 @@ const styles = StyleSheet.create({
   checkBoxOn: { backgroundColor: GREEN, borderColor: GREEN },
   checkMark: { color: "#000", fontWeight: "900", fontSize: 12 },
   checkLabel: { color: "#E5E7EB", fontSize: 13, flex: 1 },
+  keyboardWrap: { flex: 1 },
 });
 
 export default styles;

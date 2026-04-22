@@ -19,6 +19,7 @@ const styles = StyleSheet.create({
 
   form: { marginTop: 20 },
   label: { color: "#D1D5DB", fontSize: 12, marginBottom: 8 },
+  labelSpaced: { marginTop: 16 },
 
   passwordWrap: {
     flexDirection: "row",

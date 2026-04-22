@@ -12,8 +12,10 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import DatePicker from "react-native-date-picker";
-import Icon from "react-native-vector-icons/FontAwesome6";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
+import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import FancyBackButton from "../components/common/FancyBackButton";
 import styles from "./RegistrationScreen.styles";
 
@@ -237,6 +239,27 @@ export default function RegistrationScreen({ navigation }) {
   };
 
   function PersonalStep() {
+    const openDobPicker = () => {
+      if (Platform.OS === "android") {
+        DateTimePickerAndroid.open({
+          value: dobDate,
+          mode: "date",
+          maximumDate: new Date(),
+          onChange: (event, selectedDate) => {
+            if (event.type !== "set" || !selectedDate) return;
+            setDobDate(selectedDate);
+            const yyyy = selectedDate.getFullYear();
+            const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
+            const dd = String(selectedDate.getDate()).padStart(2, "0");
+            setDateOfBirth(`${yyyy}-${mm}-${dd}`);
+          },
+        });
+        return;
+      }
+
+      setDobOpen(true);
+    };
+
     return (
       <ScrollView {...scrollProps}>
         <FancyBackButton onPress={() => navigation.goBack()} label="Back" />
@@ -251,7 +274,7 @@ export default function RegistrationScreen({ navigation }) {
         <Text style={styles.sub}>Step 1: Personal Information</Text>
 
         <View style={styles.row2}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.rowHalf}>
             <Text style={styles.label}>First Name (Optional)</Text>
             <TextInput
               value={firstName}
@@ -264,7 +287,7 @@ export default function RegistrationScreen({ navigation }) {
             />
           </View>
 
-          <View style={{ flex: 1 }}>
+          <View style={styles.rowHalf}>
             <Text style={styles.label}>Last Name (Optional)</Text>
             <TextInput
               value={lastName}
@@ -301,32 +324,28 @@ export default function RegistrationScreen({ navigation }) {
         />
 
         <Text style={styles.label}>Date of Birth *</Text>
-        <Pressable style={styles.inputBtn} onPress={() => setDobOpen(true)}>
+        <Pressable style={styles.inputBtn} onPress={openDobPicker}>
           <Text style={styles.inputBtnText}>
             {dateOfBirth ? dateOfBirth : "Select your date of birth"}
           </Text>
         </Pressable>
 
-        <DatePicker
-          modal
-          open={dobOpen}
-          date={dobDate}
-          mode="date"
-          theme="dark"
-          title="Select Date of Birth"
-          confirmText="Confirm"
-          cancelText="Cancel"
-          maximumDate={new Date()}
-          onConfirm={(date) => {
-            setDobOpen(false);
-            setDobDate(date);
-            const yyyy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, "0");
-            const dd = String(date.getDate()).padStart(2, "0");
-            setDateOfBirth(`${yyyy}-${mm}-${dd}`);
-          }}
-          onCancel={() => setDobOpen(false)}
-        />
+        {Platform.OS === "ios" && dobOpen && (
+          <DateTimePicker
+            value={dobDate}
+            mode="date"
+            display="spinner"
+            maximumDate={new Date()}
+            onChange={(_, selectedDate) => {
+              if (!selectedDate) return;
+              setDobDate(selectedDate);
+              const yyyy = selectedDate.getFullYear();
+              const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
+              const dd = String(selectedDate.getDate()).padStart(2, "0");
+              setDateOfBirth(`${yyyy}-${mm}-${dd}`);
+            }}
+          />
+        )}
 
         <Text style={styles.label}>Gender *</Text>
         <View style={styles.genderRow}>
@@ -466,7 +485,7 @@ export default function RegistrationScreen({ navigation }) {
           </View>
         )}
 
-        <Text style={[styles.q, { marginTop: 18 }]}>
+        <Text style={[styles.q, styles.qSpaced]}>
           Do you suffer from any chronic food-related diseases?
         </Text>
         <YesNo
@@ -506,7 +525,7 @@ export default function RegistrationScreen({ navigation }) {
 
         {gender === 2 && (
           <>
-            <Text style={[styles.q, { marginTop: 18 }]}>
+            <Text style={[styles.q, styles.qSpaced]}>
               Are you currently pregnant?
             </Text>
             <YesNo value={isPregnant} onChange={setIsPregnant} />
@@ -516,7 +535,7 @@ export default function RegistrationScreen({ navigation }) {
         <Pressable
           onPress={submitRegister}
           disabled={submitting}
-          style={[styles.mainBtn, submitting && { opacity: 0.7 }]}
+          style={[styles.mainBtn, submitting && styles.mainBtnDisabled]}
         >
           {submitting ? (
             <ActivityIndicator />
@@ -531,7 +550,7 @@ export default function RegistrationScreen({ navigation }) {
 return (
   <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.keyboardWrap}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
     >

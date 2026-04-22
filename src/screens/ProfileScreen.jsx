@@ -13,8 +13,8 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import Icon from "react-native-vector-icons/FontAwesome6";
-import LinearGradient from "react-native-linear-gradient";
+import { FontAwesome6 as Icon } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   getAllergies,
   getDiseases,

@@ -109,7 +109,7 @@ export default function ResetPasswordScreen({ route, navigation }) {
               </Pressable>
             </View>
 
-            <Text style={[styles.label, { marginTop: 16 }]}>Confirm Password</Text>
+            <Text style={[styles.label, styles.labelSpaced]}>Confirm Password</Text>
             <View style={styles.passwordWrap}>
               <TextInput
                 value={confirmPassword}

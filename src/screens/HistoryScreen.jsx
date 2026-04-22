@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Icon from "react-native-vector-icons/FontAwesome6";
+import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import { getScanDetails, getScanHistory } from "../api/scan";
 import FancyBackButton from "../components/common/FancyBackButton";
 import styles from "./HistoryScreen.styles";
@@ -16,7 +16,7 @@ import styles from "./HistoryScreen.styles";
 const PAGE_SIZE = 5;
 
 const STATUS_META = {
-  SAFE: {
+  safe: {
     label: "Safe",
     icon: "shield-halved",
     color: "#22C55E",
@@ -24,7 +24,7 @@ const STATUS_META = {
     badgeTextStyle: styles.dishStatusBadgeTextSafe,
     cardStyle: styles.dishCardSafe,
   },
-  RISKY: {
+  risky: {
     label: "Risky",
     icon: "triangle-exclamation",
     color: "#EAB308",
@@ -32,7 +32,7 @@ const STATUS_META = {
     badgeTextStyle: styles.dishStatusBadgeTextWarning,
     cardStyle: styles.dishCardWarning,
   },
-  UNSAFE: {
+  unsafe: {
     label: "Unsafe",
     icon: "circle-xmark",
     color: "#EF4444",
@@ -40,7 +40,7 @@ const STATUS_META = {
     badgeTextStyle: styles.dishStatusBadgeTextUnsafe,
     cardStyle: styles.dishCardUnsafe,
   },
-  UNKNOWN: {
+  unknown: {
     label: "Review",
     icon: "clipboard-list",
     color: "#94A3B8",
@@ -51,7 +51,7 @@ const STATUS_META = {
 };
 
 function getStatusMeta(status) {
-  return STATUS_META[String(status || "UNKNOWN").toUpperCase()] || STATUS_META.UNKNOWN;
+  return STATUS_META[String(status || "unknown").toLowerCase()] || STATUS_META.unknown;
 }
 
 function getRecordTotals(record) {
@@ -64,14 +64,20 @@ function getRecordTotals(record) {
 
 function getOverallStatus(record) {
   const { risky, unsafe } = getRecordTotals(record);
-  if (unsafe > 0) return "UNSAFE";
-  if (risky > 0) return "RISKY";
-  return "SAFE";
+  if (unsafe > 0) return "unsafe";
+  if (risky > 0) return "risky";
+  return "safe";
 }
 
 function getAiNarrative(record) {
-  if (record?.ShortSummary) {
-    return String(record.ShortSummary);
+  const summaryText =
+    record?.ShortSummary ||
+    record?.Summary?.short_summary ||
+    record?.Summary?.shortSummary ||
+    "";
+
+  if (String(summaryText).trim()) {
+    return String(summaryText).trim();
   }
 
   const { safe, risky, unsafe } = getRecordTotals(record);
@@ -146,19 +152,24 @@ function formatDateTime(value) {
   return parsed.toLocaleString();
 }
 
+function getSavedMenuLocation(scan) {
+  const rawLocation = scan?.MenuLocation || scan?.FilePath || "";
+  return String(rawLocation).trim();
+}
+
 function buildStatusBreakdown(record) {
   const { safe, risky, unsafe } = getRecordTotals(record);
   return [
-    { key: "safe", label: "Safe dishes", count: safe, status: "SAFE" },
-    { key: "risky", label: "Risky dishes", count: risky, status: "RISKY" },
-    { key: "unsafe", label: "Unsafe dishes", count: unsafe, status: "UNSAFE" },
+    { key: "safe", label: "Safe dishes", count: safe, status: "safe" },
+    { key: "risky", label: "Risky dishes", count: risky, status: "risky" },
+    { key: "unsafe", label: "Unsafe dishes", count: unsafe, status: "unsafe" },
   ];
 }
 
 function getScanAccentStyle(status) {
-  if (status === "SAFE") return styles.scanOrbSafe;
-  if (status === "RISKY") return styles.scanOrbRisky;
-  if (status === "UNSAFE") return styles.scanOrbUnsafe;
+  if (status === "safe") return styles.scanOrbSafe;
+  if (status === "risky") return styles.scanOrbRisky;
+  if (status === "unsafe") return styles.scanOrbUnsafe;
   return styles.scanOrbNeutral;
 }
 
@@ -268,7 +279,7 @@ export default function HistoryScreen({ navigation, route }) {
 
   function renderDishCard(dish) {
     const dishMeta = getStatusMeta(dish?.SafetyStatus);
-    const status = String(dish?.SafetyStatus || "UNKNOWN").toUpperCase();
+    const status = String(dish?.SafetyStatus || "unknown").toLowerCase();
 
     return (
       <View
@@ -286,7 +297,7 @@ export default function HistoryScreen({ navigation, route }) {
           <Text style={dishMeta.badgeTextStyle}>{dishMeta.label}</Text>
         </View>
 
-        {status !== "SAFE" && (
+        {status !== "safe" && (
           <View style={styles.recommendationBox}>
             <Text style={styles.detailNarrativeLabel}>AI note</Text>
             <Text style={styles.recommendationText}>{getDishPrimaryExplanation(dish)}</Text>
@@ -348,6 +359,11 @@ export default function HistoryScreen({ navigation, route }) {
                   <Text style={styles.heroHeadline}>Your safety overview</Text>
                   <Text style={styles.heroSubtext}>{getAiNarrative(selectedScan)}</Text>
                   <Text style={styles.savedScanMeta}>{formatDateTime(selectedScan.ScanDate)}</Text>
+                  {!!getSavedMenuLocation(selectedScan) && (
+                    <Text style={styles.savedScanLocation}>
+                      Saved menu: {getSavedMenuLocation(selectedScan)}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.scoreRing}>
@@ -543,9 +559,9 @@ export default function HistoryScreen({ navigation, route }) {
                                   <View
                                     style={[
                                       styles.dot,
-                                      item.status === "SAFE" && styles.dotSafe,
-                                      item.status === "RISKY" && styles.dotWarn,
-                                      item.status === "UNSAFE" && styles.dotUnsafe,
+                                      item.status === "safe" && styles.dotSafe,
+                                      item.status === "risky" && styles.dotWarn,
+                                      item.status === "unsafe" && styles.dotUnsafe,
                                     ]}
                                   />
                                   <Text style={styles.historyStatText}>

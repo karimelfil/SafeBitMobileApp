@@ -1,4 +1,9 @@
 {
-  "name": "SafeBit",
-  "displayName": "SafeBit"
+  "expo": {
+    "name": "SafeBit",
+    "slug": "safebit",
+    "version": "0.0.1",
+    "scheme": "safebite",
+    "icon": "./assets/icon.png"
+  }
 }

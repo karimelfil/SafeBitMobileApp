@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  PermissionsAndroid,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -11,15 +9,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  errorCodes as documentErrorCodes,
-  isErrorWithCode as isDocumentErrorWithCode,
-  keepLocalCopy,
-  pick,
-  types as documentTypes,
-} from "@react-native-documents/picker";
-import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-import Icon from "react-native-vector-icons/FontAwesome6";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import FancyBackButton from "../components/common/FancyBackButton";
 import { submitDishFeedback } from "../api/feedback";
 import { uploadMenu } from "../api/menu";
@@ -29,7 +21,7 @@ function getStatusIcon(status) {
   if (status === "safe") {
     return { name: "shield-halved", color: "#22C55E" };
   }
-  if (status === "warning") {
+  if (status === "risky") {
     return { name: "triangle-exclamation", color: "#EAB308" };
   }
   return { name: "circle-xmark", color: "#EF4444" };
@@ -37,7 +29,7 @@ function getStatusIcon(status) {
 
 function getStatusLabel(status) {
   if (status === "safe") return "Safe";
-  if (status === "warning") return "Risky";
+  if (status === "risky") return "Risky";
   return "Unsafe";
 }
 
@@ -97,22 +89,35 @@ function buildDetectedIngredients(dish) {
   return ingredients.map(formatTag).filter(Boolean);
 }
 
-function buildDishWarnings(dish) {
-  const warnings = [];
-
-  if (dish?.needs_user_confirmation) {
-    warnings.push("Needs confirmation with the restaurant before ordering.");
+function getDishPrimaryExplanation(dish, ingredients) {
+  const shortSummary =
+    dish?.short_summary || dish?.shortSummary || dish?.ShortSummary || "";
+  if (String(shortSummary).trim()) {
+    return String(shortSummary).trim();
   }
 
-  (dish?.notes || []).forEach((note) => {
-    if (note) warnings.push(note);
-  });
+  const conflicts = Array.isArray(dish?.conflicts) ? dish.conflicts.filter(Boolean) : [];
+  const notes = Array.isArray(dish?.notes) ? dish.notes.filter(Boolean) : [];
 
-  (dish?.conflicts || []).forEach((conflict) => {
-    if (conflict?.explanation) warnings.push(conflict.explanation);
-  });
+  if (conflicts.length > 0) {
+    const explanation = conflicts
+      .map((conflict) => String(conflict?.explanation || "").trim())
+      .filter(Boolean)
+      .join(" ");
 
-  return [...new Set(warnings)];
+    if (explanation) return explanation;
+  }
+
+  if (notes.length > 0) {
+    const noteText = notes.map((note) => String(note).trim()).filter(Boolean).join(" ");
+    if (noteText) return noteText;
+  }
+
+  if (ingredients.length > 0) {
+    return `AI detected possible triggers in this dish: ${ingredients.join(", ")}.`;
+  }
+
+  return "No detailed AI explanation was returned for this dish.";
 }
 
 function buildDetectedDiseases(dish) {
@@ -135,37 +140,27 @@ function mapUploadResponseToResults(payload) {
   return apiDishes.map((dish, index) => {
     const safetyLevel = String(
       dish?.safety_level || dish?.safetyLevel || dish?.SafetyLevel || ""
-    ).toUpperCase();
+    ).toLowerCase();
     const needsUserConfirmation = Boolean(
       dish?.needs_user_confirmation ?? dish?.needsUserConfirmation
     );
-    const isSafe = safetyLevel === "SAFE";
-    const isUnsafe = safetyLevel === "RISKY" || safetyLevel === "UNSAFE";
-    const hasWarning = safetyLevel === "CAUTION" || needsUserConfirmation;
+    const isSafe = safetyLevel === "safe";
+    const isUnsafe = safetyLevel === "unsafe";
+    const hasWarning = safetyLevel === "risky" || needsUserConfirmation;
     const displayLevel =
-      safetyLevel === "CAUTION"
+      safetyLevel === "safe"
+        ? "SAFE"
+        : safetyLevel === "risky"
         ? "RISKY"
-        : isUnsafe
+        : safetyLevel === "unsafe"
         ? "UNSAFE"
-        : safetyLevel || "UNKNOWN";
+        : "UNKNOWN";
 
     const ingredients = buildDetectedIngredients(dish);
-    const conflicts = Array.isArray(dish?.conflicts) ? dish.conflicts : [];
-    const notes = Array.isArray(dish?.notes) ? dish.notes : [];
-    const firstConflict = conflicts[0]?.explanation;
-    const firstNote = notes[0];
     const rawDishName =
       dish?.dish_name || dish?.dishName || dish?.DishName || `Dish ${index + 1}`;
     const name = String(rawDishName).replace(/^Dish Name:\s*/i, "").trim();
-    const description = isSafe
-      ? ingredients.length
-        ? `Detected ingredients: ${ingredients.join(", ")}`
-        : "No ingredients detected"
-      : firstConflict ||
-        firstNote ||
-        (ingredients.length
-          ? `Detected ingredients: ${ingredients.join(", ")}`
-          : "No ingredients detected");
+    const aiNote = getDishPrimaryExplanation(dish, ingredients);
 
     const dishId =
       toValidDishId(dish?.dish_id ?? dish?.dishId ?? dish?.DishId) ??
@@ -176,46 +171,39 @@ function mapUploadResponseToResults(payload) {
       id: dishId ?? `${payload?.menuId || "menu"}-${index}`,
       dishId,
       name,
-      description,
-      category: safetyLevel || "UNKNOWN",
+      aiNote,
+      category: safetyLevel || "unknown",
       displayLevel,
       allergens: ingredients,
       diseases: buildDetectedDiseases(dish),
-      warnings: buildDishWarnings(dish),
       isSafe,
       isUnsafe,
       hasWarning,
-      status: isSafe ? "safe" : isUnsafe ? "unsafe" : "warning",
+      status: isSafe ? "safe" : isUnsafe ? "unsafe" : "risky",
     };
   });
 }
 
-function getRecommendation(status) {
-  if (status === "safe") {
-    return "This item appears compatible with your profile based on the detected ingredients and allergen signals.";
+function getAiNarrative(summaryText, safeCount, riskyCount, unsafeCount) {
+  if (String(summaryText || "").trim()) {
+    return String(summaryText).trim();
   }
 
-  if (status === "warning") {
-    return "This item needs extra attention, so confirm ingredients or preparation details with the restaurant before ordering.";
-  }
+  const total = safeCount + riskyCount + unsafeCount;
 
-  return "This item is not recommended for your profile due to strong allergen or dietary risk indicators.";
-}
-
-function getOverallMessage(safePercent, warningCount, unsafeCount) {
-  if (safePercent >= 70 && unsafeCount === 0) {
-    return "This menu looks generally friendly for your dietary profile, with several strong options you can prioritize.";
+  if (!total) {
+    return "No dish classification is available yet. Open the scan to review the extracted menu items.";
   }
 
   if (unsafeCount > 0) {
-    return "This menu includes some dishes that may not be suitable for you, so review flagged items carefully before ordering.";
+    return `AI flagged ${unsafeCount} ${unsafeCount === 1 ? "dish as unsafe" : "dishes as unsafe"} and recommends avoiding them before ordering.`;
   }
 
-  if (warningCount > 0) {
-    return "There are good options here, but a few dishes need extra attention before you make a final choice.";
+  if (riskyCount > 0) {
+    return `AI marked ${riskyCount} ${riskyCount === 1 ? "dish as risky" : "dishes as risky"} and suggests confirming ingredients with the restaurant.`;
   }
 
-  return "Your analysis is ready. Review the dish-by-dish assessment below.";
+  return `AI reviewed ${total} ${total === 1 ? "dish" : "dishes"} and found a clean result with no warning flags.`;
 }
 
 function bytesToMb(size) {
@@ -238,42 +226,13 @@ function formatPickedFile(file, fallbackType) {
   };
 }
 
-async function normalizePickedPdf(file) {
-  if (!file?.uri) return file;
-  if (Platform.OS !== "android") return file;
-
-  try {
-    const copied = await keepLocalCopy({
-      destination: "cachesDirectory",
-      files: [
-        {
-          uri: file.uri,
-          fileName: file.name || "menu-upload.pdf",
-        },
-      ],
-    });
-
-    const localCopy = copied?.[0];
-
-    if (localCopy?.status === "success" && localCopy.localUri) {
-      return {
-        ...file,
-        uri: localCopy.localUri,
-      };
-    }
-  } catch {
-    return file;
-  }
-
-  return file;
-}
-
 function formatImagePickerAsset(asset, fallbackType, source = "library") {
   const preferredUri = asset?.uri;
   const safeName =
     asset?.fileName ||
     (source === "camera" ? `camera-menu-${Date.now()}.jpg` : `menu-${Date.now()}.jpg`);
   const safeType =
+    asset?.mimeType ||
     asset?.type ||
     (source === "camera" ? "image/jpeg" : "application/octet-stream");
 
@@ -300,7 +259,7 @@ export default function MenuUploadScreen({ navigation }) {
 
   const safeDishes = results.filter((dish) => dish.isSafe);
   const warningDishes = results.filter(
-    (dish) => dish.hasWarning || dish.category === "CAUTION"
+    (dish) => dish.hasWarning || dish.category === "risky"
   );
   const unsafeDishes = results.filter((dish) => dish.isUnsafe);
 
@@ -314,39 +273,27 @@ export default function MenuUploadScreen({ navigation }) {
 
   async function openUploadOptions() {
     try {
-      const result = await pick({
-        type: [documentTypes.pdf],
-        presentationStyle: "fullScreen",
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+        multiple: false,
       });
 
-      const selected = result?.[0];
+      if (result.canceled) return;
+      const selected = result.assets?.[0];
+      if (!selected) return;
 
-      if (!selected) {
-        return;
-      }
-
-      const normalizedPdf = await normalizePickedPdf(selected);
       setFile(
         formatPickedFile(
           {
-            ...normalizedPdf,
-            name: normalizedPdf?.name || selected?.name || "menu-upload.pdf",
-            type:
-              normalizedPdf?.type ||
-              selected?.type ||
-              "application/pdf",
+            ...selected,
+            name: selected?.name || "menu-upload.pdf",
+            type: selected?.mimeType || "application/pdf",
           },
           "PDF"
         )
       );
     } catch (err) {
-      if (
-        isDocumentErrorWithCode(err) &&
-        err.code === documentErrorCodes.OPERATION_CANCELED
-      ) {
-        return;
-      }
-
       Alert.alert(
         "Upload Error",
         err?.message || "Could not open the PDF picker."
@@ -356,25 +303,22 @@ export default function MenuUploadScreen({ navigation }) {
 
   async function handlePhotoLibrarySelect() {
     try {
-      const result = await launchImageLibrary({
-        mediaType: "photo",
-        selectionLimit: 1,
-        quality: 0.82,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        includeBase64: false,
-        assetRepresentationMode: "current",
-      });
-
-      if (result.didCancel) return;
-
-      if (result.errorCode) {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
         Alert.alert(
-          "Upload Error",
-          result.errorMessage || "Could not open the photo library."
+          "Permission Required",
+          "Photo library permission is needed to choose an image."
         );
         return;
       }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.82,
+        allowsMultipleSelection: false,
+      });
+
+      if (result.canceled) return;
 
       const asset = result.assets?.[0];
 
@@ -391,47 +335,22 @@ export default function MenuUploadScreen({ navigation }) {
 
   async function handleCameraSelect() {
     try {
-      if (Platform.OS === "android") {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: "Camera Permission",
-            message: "SafeBite needs access to your camera to take a menu photo.",
-            buttonPositive: "Allow",
-            buttonNegative: "Cancel",
-          }
-        );
-
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert(
-            "Permission Required",
-            "Camera permission is needed to take a photo."
-          );
-          return;
-        }
-      }
-
-      const result = await launchCamera({
-        mediaType: "photo",
-        cameraType: "back",
-        saveToPhotos: false,
-        quality: 1,
-        maxWidth: 2400,
-        maxHeight: 2400,
-        includeBase64: false,
-        assetRepresentationMode: "current",
-        conversionQuality: 1,
-      });
-
-      if (result.didCancel) return;
-
-      if (result.errorCode) {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
         Alert.alert(
-          "Camera Error",
-          result.errorMessage || "Could not open the camera."
+          "Permission Required",
+          "Camera permission is needed to take a photo."
         );
         return;
       }
+
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 1,
+        cameraType: ImagePicker.CameraType.back,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+
+      if (result.canceled) return;
 
       const asset = result.assets?.[0];
 
@@ -595,77 +514,63 @@ export default function MenuUploadScreen({ navigation }) {
     const badgeStyle =
       dish.status === "safe"
         ? styles.dishStatusBadgeSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.dishStatusBadgeWarning
         : styles.dishStatusBadgeUnsafe;
 
     const badgeTextStyle =
       dish.status === "safe"
         ? styles.dishStatusBadgeTextSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.dishStatusBadgeTextWarning
         : styles.dishStatusBadgeTextUnsafe;
 
     const reportLinkStyle =
       dish.status === "safe"
         ? styles.reportLinkSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.reportLinkRisky
         : styles.reportLinkUnsafe;
 
     const recommendationBoxStyle =
       dish.status === "safe"
         ? styles.recommendationBoxSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.recommendationBoxRisky
         : styles.recommendationBoxUnsafe;
 
     const recommendationTextStyle =
       dish.status === "safe"
         ? styles.recommendationTextSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.recommendationTextRisky
         : styles.recommendationTextUnsafe;
-
-    const warningChipStyle =
-      dish.status === "safe"
-        ? styles.warningChipSafe
-        : dish.status === "warning"
-        ? styles.warningChipRisky
-        : styles.warningChipUnsafe;
-
-    const warningChipTextStyle =
-      dish.status === "safe"
-        ? styles.warningChipTextSafe
-        : dish.status === "warning"
-        ? styles.warningChipTextRisky
-        : styles.warningChipTextUnsafe;
 
     const ingredientChipStyle =
       dish.status === "safe"
         ? styles.allergenChipSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.allergenChipRisky
         : styles.allergenChipUnsafe;
 
     const ingredientChipTextStyle =
       dish.status === "safe"
         ? styles.allergenChipTextSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.allergenChipTextRisky
         : styles.allergenChipTextUnsafe;
 
     const diseaseChipStyle =
       dish.status === "safe"
         ? styles.diseaseChipSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.diseaseChipRisky
         : styles.diseaseChipUnsafe;
 
     const diseaseChipTextStyle =
       dish.status === "safe"
         ? styles.diseaseChipTextSafe
-        : dish.status === "warning"
+        : dish.status === "risky"
         ? styles.diseaseChipTextRisky
         : styles.diseaseChipTextUnsafe;
 
@@ -675,7 +580,7 @@ export default function MenuUploadScreen({ navigation }) {
         style={[
           styles.dishCard,
           dish.status === "safe" && styles.dishCardSafe,
-          dish.status === "warning" && styles.dishCardWarning,
+          dish.status === "risky" && styles.dishCardWarning,
           dish.status === "unsafe" && styles.dishCardUnsafe,
         ]}
       >
@@ -689,8 +594,9 @@ export default function MenuUploadScreen({ navigation }) {
         </View>
 
         <View style={[styles.recommendationBox, recommendationBoxStyle]}>
+          <Text style={styles.detailNarrativeLabel}>AI note</Text>
           <Text style={[styles.recommendationText, recommendationTextStyle]}>
-            {getRecommendation(dish.status)}
+            {dish.aiNote || "No detailed AI explanation was returned for this dish."}
           </Text>
         </View>
 
@@ -723,21 +629,6 @@ export default function MenuUploadScreen({ navigation }) {
                 >
                   <Text style={[styles.diseaseChipText, diseaseChipTextStyle]}>
                     {disease}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {dish.warnings.length > 0 && (
-          <View>
-            <Text style={[styles.blockTitle, styles.warningTitle]}>Warnings</Text>
-            <View style={styles.chipsWrap}>
-              {dish.warnings.map((warning) => (
-                <View key={`${dish.id}-${warning}`} style={[styles.warningChip, warningChipStyle]}>
-                  <Text style={[styles.warningChipText, warningChipTextStyle]}>
-                    {warning}
                   </Text>
                 </View>
               ))}
@@ -806,8 +697,9 @@ export default function MenuUploadScreen({ navigation }) {
   }
 
   if (viewMode === "results") {
-    const overallMessage = getOverallMessage(
-      safePercent,
+    const overallMessage = getAiNarrative(
+      analysisSummary,
+      safeCount,
       warningCount,
       unsafeCount
     );
@@ -839,7 +731,7 @@ export default function MenuUploadScreen({ navigation }) {
             <View style={styles.heroCard}>
               <View style={styles.heroTopRow}>
                 <View style={styles.heroContent}>
-                  <Text style={styles.heroEyebrow}>Analysis Complete</Text>
+                  <Text style={styles.heroEyebrow}>AI Summary</Text>
                   <Text style={styles.heroHeadline}>Your safety overview</Text>
                   <Text style={styles.heroSubtext}>{overallMessage}</Text>
                 </View>
@@ -865,19 +757,6 @@ export default function MenuUploadScreen({ navigation }) {
                   <Text style={styles.insightValueUnsafe}>{unsafeCount}</Text>
                   <Text style={styles.insightText}>Unsafe</Text>
                 </View>
-              </View>
-            </View>
-
-            <View style={styles.safetyCard}>
-              <View style={styles.safetyIconCircle}>
-                <Icon name="shield-halved" size={15} color="#FFFFFF" solid />
-              </View>
-              <View style={styles.safetyTextWrap}>
-                <Text style={styles.safetyTitle}>Safety Summary</Text>
-                <Text style={styles.safetyDescription}>
-                  {analysisSummary ||
-                    `${safePercent}% of detected menu items are considered safer for your profile based on the current analysis.`}
-                </Text>
               </View>
             </View>
 

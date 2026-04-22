@@ -31,14 +31,20 @@ const normalizeHistoryRecord = (record, index) => ({
   SafeCount: toNumber(pickFirst(record, ["SafeCount", "safeCount", "safe", "Safe"])),
   UnsafeCount: toNumber(pickFirst(record, ["UnsafeCount", "unsafeCount", "unsafe", "Unsafe"])),
   RiskyCount: toNumber(pickFirst(record, ["RiskyCount", "riskyCount", "warningCount", "warnings", "Warnings"])),
+  Summary: pickFirst(record, ["Summary", "summary"], null),
+  ShortSummary:
+    pickFirst(record, ["ShortSummary", "shortSummary"], null) ||
+    pickFirst(record, ["Summary", "summary"], {})?.short_summary ||
+    pickFirst(record, ["Summary", "summary"], {})?.shortSummary ||
+    null,
 });
 
 const normalizeDish = (dish, index) => ({
   DishID: pickFirst(dish, ["DishID", "dishID", "dishId", "id", "Id"], index + 1),
   DishName: String(pickFirst(dish, ["DishName", "dishName", "name", "Name"], `Dish ${index + 1}`)),
   SafetyStatus: String(
-    pickFirst(dish, ["SafetyStatus", "safetyStatus", "status", "Status"], "UNKNOWN")
-  ).toUpperCase(),
+    pickFirst(dish, ["SafetyStatus", "safetyStatus", "status", "Status"], "unknown")
+  ).toLowerCase(),
   Ingredients: Array.isArray(pickFirst(dish, ["Ingredients", "ingredients"], []))
     ? pickFirst(dish, ["Ingredients", "ingredients"], [])
     : [],
@@ -77,6 +83,24 @@ const normalizeDetails = (payload) => ({
   ),
   ScanDate: String(
     pickFirst(payload, ["ScanDate", "scanDate", "createdAt", "CreatedAt", "date", "Date"], new Date().toISOString())
+  ),
+  MenuLocation: String(
+    pickFirst(
+      payload,
+      [
+        "MenuLocation",
+        "menuLocation",
+        "SavedMenuLocation",
+        "savedMenuLocation",
+        "Location",
+        "location",
+        "StorageLocation",
+        "storageLocation",
+        "FilePath",
+        "filePath",
+      ],
+      ""
+    ) || ""
   ),
   FilePath: String(pickFirst(payload, ["FilePath", "filePath"], "") || ""),
   Summary: pickFirst(payload, ["Summary", "summary"], null),
