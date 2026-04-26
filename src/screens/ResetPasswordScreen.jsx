@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import api from "../api/client";
 import FancyBackButton from "../components/common/FancyBackButton";
 import styles from "./ResetPasswordScreen.styles";
@@ -80,7 +81,11 @@ export default function ResetPasswordScreen({ route, navigation }) {
         style={styles.safe}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
           <FancyBackButton onPress={() => navigation.navigate("Login")} label="Back to Login" />
 
           <View style={styles.header}>
@@ -104,8 +109,19 @@ export default function ResetPasswordScreen({ route, navigation }) {
                 secureTextEntry={secure1}
                 style={styles.passwordInput}
               />
-              <Pressable onPress={() => setSecure1((s) => !s)} hitSlop={10} style={styles.eyeBtn}>
-                <Text style={styles.eyeText}>{secure1 ? "ðŸ‘" : "ðŸ™ˆ"}</Text>
+              <Pressable
+                onPress={() => setSecure1((s) => !s)}
+                hitSlop={10}
+                style={styles.eyeBtn}
+                accessibilityRole="button"
+                accessibilityLabel={secure1 ? "Show new password" : "Hide new password"}
+              >
+                <Icon
+                  name={secure1 ? "eye" : "eye-slash"}
+                  size={18}
+                  color="#9CA3AF"
+                  solid
+                />
               </Pressable>
             </View>
 
@@ -119,8 +135,21 @@ export default function ResetPasswordScreen({ route, navigation }) {
                 secureTextEntry={secure2}
                 style={styles.passwordInput}
               />
-              <Pressable onPress={() => setSecure2((s) => !s)} hitSlop={10} style={styles.eyeBtn}>
-                <Text style={styles.eyeText}>{secure2 ? "ðŸ‘" : "ðŸ™ˆ"}</Text>
+              <Pressable
+                onPress={() => setSecure2((s) => !s)}
+                hitSlop={10}
+                style={styles.eyeBtn}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  secure2 ? "Show confirm password" : "Hide confirm password"
+                }
+              >
+                <Icon
+                  name={secure2 ? "eye" : "eye-slash"}
+                  size={18}
+                  color="#9CA3AF"
+                  solid
+                />
               </Pressable>
             </View>
 

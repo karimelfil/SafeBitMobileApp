@@ -52,7 +52,11 @@ export default function ForgotPasswordScreen({ navigation }) {
         style={styles.safe}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
           <FancyBackButton onPress={() => navigation.goBack()} label="Back to Login" />
 
           <View style={styles.header}>

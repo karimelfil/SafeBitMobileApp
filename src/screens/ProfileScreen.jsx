@@ -35,6 +35,8 @@ const GENDER_OPTIONS = [
   { code: 2, label: "Female" },
 ];
 
+const PHONE_MAX_LENGTH = 18;
+
 const UI_ICONS = {
   profile: "user-shield",
   personal: "id-card",
@@ -68,13 +70,6 @@ function toDateInput(value) {
   return String(value);
 }
 
-function formatDisplayDate(value) {
-  if (!value) return "Not set";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString();
-}
-
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.data)) return data.data;
@@ -106,6 +101,25 @@ function getNextAvailableOptionId(options, selectedIds, fallbackId = null) {
   return nextOption?.id ?? fallbackId;
 }
 
+function getFilteredOptions(options, query) {
+  const search = String(query || "").trim().toLowerCase();
+  return [...options]
+    .filter((item) => !search || String(item.name || "").toLowerCase().includes(search))
+    .sort((a, b) => {
+      const getRank = (name) => {
+        const label = String(name || "").toLowerCase();
+        if (!search) return 0;
+        if (label === search) return 0;
+        if (label.startsWith(search)) return 1;
+        if (label.includes(search)) return 2;
+        return 3;
+      };
+      const rankDiff = getRank(a.name) - getRank(b.name);
+      if (rankDiff !== 0) return rankDiff;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+}
+
 function getApiErrorMessage(err, fallback) {
   const responseData = err?.response?.data;
   if (!responseData) return fallback;
@@ -115,51 +129,44 @@ function getApiErrorMessage(err, fallback) {
   return fallback;
 }
 
-function isUnauthorizedError(err) {
-  return Number(err?.response?.status) === 401;
+function normalizePhoneForValidation(value) {
+  return String(value || "").replace(/[^\d+]/g, "");
 }
 
-function SelectModal({ visible, title, options, onSelect, onClose, selectedId }) {
-  return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.selectModalCard}>
-          <View style={styles.selectModalHeader}>
-            <Text style={styles.selectModalTitle}>{title}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Icon name={UI_ICONS.close} size={20} color="#9CA3AF" solid />
-            </TouchableOpacity>
-          </View>
+function isValidLebanesePhone(value) {
+  const clean = normalizePhoneForValidation(value);
+  if (!clean) return true;
 
-          <ScrollView style={styles.selectList} showsVerticalScrollIndicator={false}>
-            {options.map((item) => {
-              const selected = String(selectedId) === String(item.id);
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.selectItem, selected && styles.selectItemActive]}
-                  onPress={() => {
-                    onSelect(item.id);
-                    onClose();
-                  }}
-                >
-                  <Icon
-                    name={selected ? UI_ICONS.check : UI_ICONS.circle}
-                    size={18}
-                    color={selected ? "#1DB954" : "#6B7280"}
-                    solid
-                  />
-                  <Text style={[styles.selectItemText, selected && styles.selectItemTextActive]}>
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
+  let digits = clean;
+  if (digits.startsWith("+961")) digits = digits.slice(4);
+  else if (digits.startsWith("00961")) digits = digits.slice(5);
+
+  if (digits.startsWith("0")) digits = digits.slice(1);
+
+  return /^\d{7,8}$/.test(digits);
+}
+
+function isValidDateOfBirth(value) {
+  const clean = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
+
+  const [year, month, day] = clean.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const isRealDate =
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day;
+
+  if (!isRealDate) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return date <= today;
+}
+
+function isUnauthorizedError(err) {
+  return Number(err?.response?.status) === 401;
 }
 
 export default function ProfileScreen({ navigation }) {
@@ -171,6 +178,7 @@ export default function ProfileScreen({ navigation }) {
 
   const [profile, setProfile] = useState(null);
   const [editProfile, setEditProfile] = useState(null);
+  const [editPersonalErrors, setEditPersonalErrors] = useState({});
 
   const [allergyOptions, setAllergyOptions] = useState([]);
   const [diseaseOptions, setDiseaseOptions] = useState([]);
@@ -186,6 +194,8 @@ export default function ProfileScreen({ navigation }) {
 
   const [allergyPickerOpen, setAllergyPickerOpen] = useState(false);
   const [diseasePickerOpen, setDiseasePickerOpen] = useState(false);
+  const [allergySearch, setAllergySearch] = useState("");
+  const [diseaseSearch, setDiseaseSearch] = useState("");
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -238,12 +248,17 @@ export default function ProfileScreen({ navigation }) {
         gender: Number(profile?.gender) === 2 ? 2 : 1,
       });
     }
+    setEditPersonalErrors({});
     setViewMode("editPersonal");
   };
 
   const openEditHealth = () => {
     setPendingAllergyId(getNextAvailableOptionId(allergyOptions, healthAllergyIds, allergyOptions[0]?.id || null));
     setPendingDiseaseId(getNextAvailableOptionId(diseaseOptions, healthDiseaseIds, diseaseOptions[0]?.id || null));
+    setAllergySearch("");
+    setDiseaseSearch("");
+    setAllergyPickerOpen(false);
+    setDiseasePickerOpen(false);
     setViewMode("editHealth");
   };
 
@@ -342,22 +357,22 @@ export default function ProfileScreen({ navigation }) {
     }, [loadData])
   );
 
-  async function onAddAllergy() {
-    if (!userId || !pendingAllergyId) return;
+  async function onAddAllergy(allergyId = pendingAllergyId, options = {}) {
+    if (!userId || !allergyId) return;
 
-    if (hasId(healthAllergyIds, pendingAllergyId)) {
+    if (hasId(healthAllergyIds, allergyId)) {
       Alert.alert("Already Added", "This allergen is already saved in your profile.");
       return;
     }
 
     try {
       setSaving(true);
-      const nextIds = [...healthAllergyIds, pendingAllergyId];
-      await addUserAllergies(Number(userId), { userId: Number(userId), allergyIds: [Number(pendingAllergyId)] });
+      const nextIds = [...healthAllergyIds, allergyId];
+      await addUserAllergies(Number(userId), { userId: Number(userId), allergyIds: [Number(allergyId)] });
       setHealthAllergyIds(nextIds);
       setHealthAllergyNames(nextIds.map((id) => getNameById(allergyOptions, id)));
-      setPendingAllergyId(getNextAvailableOptionId(allergyOptions, nextIds, pendingAllergyId));
-      Alert.alert("Success", "Allergen added.");
+      setPendingAllergyId(getNextAvailableOptionId(allergyOptions, nextIds, allergyId));
+      if (!options.silent) Alert.alert("Success", "Allergen added.");
     } catch (err) {
       if (isUnauthorizedError(err)) {
         await handleUnauthorized();
@@ -369,22 +384,22 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
-  async function onAddDisease() {
-    if (!userId || !pendingDiseaseId) return;
+  async function onAddDisease(diseaseId = pendingDiseaseId, options = {}) {
+    if (!userId || !diseaseId) return;
 
-    if (hasId(healthDiseaseIds, pendingDiseaseId)) {
+    if (hasId(healthDiseaseIds, diseaseId)) {
       Alert.alert("Already Added", "This condition is already saved in your profile.");
       return;
     }
 
     try {
       setSaving(true);
-      const nextIds = [...healthDiseaseIds, pendingDiseaseId];
-      await addUserDiseases(Number(userId), { userId: Number(userId), diseaseIds: [Number(pendingDiseaseId)] });
+      const nextIds = [...healthDiseaseIds, diseaseId];
+      await addUserDiseases(Number(userId), { userId: Number(userId), diseaseIds: [Number(diseaseId)] });
       setHealthDiseaseIds(nextIds);
       setHealthDiseaseNames(nextIds.map((id) => getNameById(diseaseOptions, id)));
-      setPendingDiseaseId(getNextAvailableOptionId(diseaseOptions, nextIds, pendingDiseaseId));
-      Alert.alert("Success", "Condition added.");
+      setPendingDiseaseId(getNextAvailableOptionId(diseaseOptions, nextIds, diseaseId));
+      if (!options.silent) Alert.alert("Success", "Condition added.");
     } catch (err) {
       if (isUnauthorizedError(err)) {
         await handleUnauthorized();
@@ -396,7 +411,7 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
-  async function onDeleteAllergy(allergyId) {
+  async function onDeleteAllergy(allergyId, options = {}) {
     if (!userId) return;
 
     try {
@@ -409,7 +424,7 @@ export default function ProfileScreen({ navigation }) {
         if (currentId && !hasId(nextIds, currentId)) return currentId;
         return getNextAvailableOptionId(allergyOptions, nextIds, allergyOptions[0]?.id || null);
       });
-      Alert.alert("Success", "Allergy removed from your health profile.");
+      if (!options.silent) Alert.alert("Success", "Allergy removed from your health profile.");
     } catch (err) {
       if (isUnauthorizedError(err)) {
         await handleUnauthorized();
@@ -421,7 +436,7 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
-  async function onDeleteDisease(diseaseId) {
+  async function onDeleteDisease(diseaseId, options = {}) {
     if (!userId) return;
 
     try {
@@ -434,7 +449,7 @@ export default function ProfileScreen({ navigation }) {
         if (currentId && !hasId(nextIds, currentId)) return currentId;
         return getNextAvailableOptionId(diseaseOptions, nextIds, diseaseOptions[0]?.id || null);
       });
-      Alert.alert("Success", "Condition removed from your health profile.");
+      if (!options.silent) Alert.alert("Success", "Condition removed from your health profile.");
     } catch (err) {
       if (isUnauthorizedError(err)) {
         await handleUnauthorized();
@@ -446,8 +461,75 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
+  function onToggleAllergyOption(allergyId) {
+    if (saving) return;
+    if (hasId(healthAllergyIds, allergyId)) {
+      onDeleteAllergy(allergyId, { silent: true });
+      return;
+    }
+    onAddAllergy(allergyId, { silent: true });
+  }
+
+  function onToggleDiseaseOption(diseaseId) {
+    if (saving) return;
+    if (hasId(healthDiseaseIds, diseaseId)) {
+      onDeleteDisease(diseaseId, { silent: true });
+      return;
+    }
+    onAddDisease(diseaseId, { silent: true });
+  }
+
+  function onClearAllergies() {
+    if (saving || healthAllergyIds.length === 0) return;
+    Alert.alert("Clear Allergies", "Remove all allergies from your profile?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear all",
+        style: "destructive",
+        onPress: async () => {
+          for (const id of [...healthAllergyIds]) {
+            await onDeleteAllergy(id, { silent: true });
+          }
+        },
+      },
+    ]);
+  }
+
+  function onClearDiseases() {
+    if (saving || healthDiseaseIds.length === 0) return;
+    Alert.alert("Clear Conditions", "Remove all chronic conditions from your profile?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear all",
+        style: "destructive",
+        onPress: async () => {
+          for (const id of [...healthDiseaseIds]) {
+            await onDeleteDisease(id, { silent: true });
+          }
+        },
+      },
+    ]);
+  }
+
   async function onSavePersonal() {
     if (!editProfile || !userId) return;
+
+    const nextErrors = {};
+    const phoneValue = String(editProfile.phone || "").trim();
+    const dobValue = String(editProfile.dateOfBirth || "").trim();
+
+    if (!isValidLebanesePhone(phoneValue)) {
+      nextErrors.phone = "Enter a valid Lebanese phone number, e.g. 03 123 456 or +961 3 123 456.";
+    }
+
+    if (!dobValue) {
+      nextErrors.dateOfBirth = "Date of birth is required.";
+    } else if (!isValidDateOfBirth(dobValue)) {
+      nextErrors.dateOfBirth = "Enter a valid date of birth in YYYY-MM-DD format.";
+    }
+
+    setEditPersonalErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
     try {
       setSaving(true);
@@ -456,8 +538,8 @@ export default function ProfileScreen({ navigation }) {
         userId: Number(userId),
         firstName: String(editProfile.firstName || "").trim(),
         lastName: String(editProfile.lastName || "").trim(),
-        phone: String(editProfile.phone || "").trim(),
-        dateOfBirth: editProfile.dateOfBirth,
+        phone: phoneValue,
+        dateOfBirth: dobValue,
         gender: Number(editProfile.gender) === 2 ? 2 : 1,
       });
 
@@ -465,10 +547,11 @@ export default function ProfileScreen({ navigation }) {
         ...current,
         firstName: String(editProfile.firstName || "").trim(),
         lastName: String(editProfile.lastName || "").trim(),
-        phone: String(editProfile.phone || "").trim(),
-        dateOfBirth: editProfile.dateOfBirth,
+        phone: phoneValue,
+        dateOfBirth: dobValue,
         gender: Number(editProfile.gender) === 2 ? 2 : 1,
       }));
+      setEditPersonalErrors({});
       setViewMode("main");
       Alert.alert("Success", "Personal information updated successfully.");
     } catch (err) {
@@ -652,38 +735,110 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={styles.cardTitle}>Allergies</Text>
                 </View>
 
-                <View style={styles.selectorRow}>
-                  <Pressable style={styles.selectorBtn} onPress={() => setAllergyPickerOpen(true)}>
-                    <Text style={styles.selectorText}>
-                      {pendingAllergyId ? getNameById(allergyOptions, pendingAllergyId) : "Select allergen"}
-                    </Text>
-                  </Pressable>
-                  <TouchableOpacity style={styles.addBtn} onPress={onAddAllergy} disabled={saving}>
-                    <Icon name={UI_ICONS.add} size={14} color="#03150A" solid />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.chipsWrap}>
-                  {healthAllergyIds.map((id) => (
-                    <View key={`a-${id}`} style={styles.chipDanger}>
-                      <Text style={styles.chipDangerText}>{getNameById(allergyOptions, id)}</Text>
-                      <TouchableOpacity
-                        onPress={() =>
-                          Alert.alert(
-                            "Remove Allergy",
-                            `Remove ${getNameById(allergyOptions, id)} from your profile?`,
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              { text: "Remove", style: "destructive", onPress: () => onDeleteAllergy(id) },
-                            ]
-                          )
-                        }
-                        disabled={saving}
-                      >
-                        <Icon name={UI_ICONS.remove} size={12} color="#F87171" solid />
-                      </TouchableOpacity>
+                <View style={styles.healthDropdown}>
+                  <Pressable
+                    style={styles.healthDropdownHeader}
+                    onPress={() => setAllergyPickerOpen((open) => !open)}
+                  >
+                    <View style={styles.healthDropdownTitleRow}>
+                      <Text style={styles.healthDropdownTitle}>Select your allergies</Text>
+                      {healthAllergyIds.length > 0 && (
+                        <View style={styles.selectedCountPill}>
+                          <Text style={styles.selectedCountText}>{healthAllergyIds.length} selected</Text>
+                        </View>
+                      )}
                     </View>
-                  ))}
+                    <View style={styles.healthHeaderActions}>
+                      {healthAllergyIds.length > 0 && (
+                        <Pressable
+                          style={styles.clearAllBtn}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            onClearAllergies();
+                          }}
+                          disabled={saving}
+                        >
+                          <Text style={styles.clearAllText}>Clear all</Text>
+                        </Pressable>
+                      )}
+                      {allergyPickerOpen && (
+                        <Pressable
+                          style={styles.doneBtn}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            setAllergyPickerOpen(false);
+                          }}
+                        >
+                          <Text style={styles.doneBtnText}>Done</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    <Icon
+                      name={allergyPickerOpen ? "chevron-up" : "chevron-down"}
+                      size={12}
+                      color="#9CA3AF"
+                      solid
+                    />
+                  </Pressable>
+
+                  {allergyPickerOpen && (
+                    <>
+                      {healthAllergyIds.length > 0 && (
+                        <View style={styles.selectedChipsWrap}>
+                          {healthAllergyIds.map((id) => (
+                            <Pressable
+                              key={`a-${id}`}
+                              style={styles.selectedHealthChip}
+                              onPress={() => onToggleAllergyOption(id)}
+                              disabled={saving}
+                            >
+                              <Text style={styles.selectedHealthChipText}>{getNameById(allergyOptions, id)}</Text>
+                              <Icon name={UI_ICONS.remove} size={11} color="#0F8F4A" solid />
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+
+                      <View style={styles.healthSearchWrap}>
+                        <Icon name="magnifying-glass" size={13} color="#6B7280" solid />
+                        <TextInput
+                          value={allergySearch}
+                          onChangeText={setAllergySearch}
+                          style={styles.healthSearchInput}
+                          placeholder="Search allergies..."
+                          placeholderTextColor="#6B7280"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                      </View>
+
+                      <ScrollView
+                        style={styles.healthDropdownList}
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={false}
+                      >
+                        {getFilteredOptions(allergyOptions, allergySearch).map((item) => {
+                          const checked = hasId(healthAllergyIds, item.id);
+                          return (
+                            <Pressable
+                              key={item.id}
+                              style={styles.healthOptionRow}
+                              onPress={() => onToggleAllergyOption(item.id)}
+                              disabled={saving}
+                            >
+                              <View style={[styles.healthCheckbox, checked && styles.healthCheckboxOn]}>
+                                {checked && <Icon name={UI_ICONS.check} size={11} color="#03150A" solid />}
+                              </View>
+                              <Text style={styles.healthOptionText}>{item.name}</Text>
+                            </Pressable>
+                          );
+                        })}
+                        {getFilteredOptions(allergyOptions, allergySearch).length === 0 && (
+                          <Text style={styles.modalNoResultsText}>No matching allergies found.</Text>
+                        )}
+                      </ScrollView>
+                    </>
+                  )}
                 </View>
               </View>
 
@@ -693,38 +848,110 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={styles.cardTitle}>Chronic Conditions</Text>
                 </View>
 
-                <View style={styles.selectorRow}>
-                  <Pressable style={styles.selectorBtn} onPress={() => setDiseasePickerOpen(true)}>
-                    <Text style={styles.selectorText}>
-                      {pendingDiseaseId ? getNameById(diseaseOptions, pendingDiseaseId) : "Select condition"}
-                    </Text>
-                  </Pressable>
-                  <TouchableOpacity style={styles.addBtn} onPress={onAddDisease} disabled={saving}>
-                    <Icon name={UI_ICONS.add} size={14} color="#03150A" solid />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.chipsWrap}>
-                  {healthDiseaseIds.map((id) => (
-                    <View key={`d-${id}`} style={styles.chipWarn}>
-                      <Text style={styles.chipWarnText}>{getNameById(diseaseOptions, id)}</Text>
-                      <TouchableOpacity
-                        onPress={() =>
-                          Alert.alert(
-                            "Remove Condition",
-                            `Remove ${getNameById(diseaseOptions, id)} from your profile?`,
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              { text: "Remove", style: "destructive", onPress: () => onDeleteDisease(id) },
-                            ]
-                          )
-                        }
-                        disabled={saving}
-                      >
-                        <Icon name={UI_ICONS.remove} size={12} color="#FACC15" solid />
-                      </TouchableOpacity>
+                <View style={styles.healthDropdown}>
+                  <Pressable
+                    style={styles.healthDropdownHeader}
+                    onPress={() => setDiseasePickerOpen((open) => !open)}
+                  >
+                    <View style={styles.healthDropdownTitleRow}>
+                      <Text style={styles.healthDropdownTitle}>Select your conditions</Text>
+                      {healthDiseaseIds.length > 0 && (
+                        <View style={styles.selectedCountPill}>
+                          <Text style={styles.selectedCountText}>{healthDiseaseIds.length} selected</Text>
+                        </View>
+                      )}
                     </View>
-                  ))}
+                    <View style={styles.healthHeaderActions}>
+                      {healthDiseaseIds.length > 0 && (
+                        <Pressable
+                          style={styles.clearAllBtn}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            onClearDiseases();
+                          }}
+                          disabled={saving}
+                        >
+                          <Text style={styles.clearAllText}>Clear all</Text>
+                        </Pressable>
+                      )}
+                      {diseasePickerOpen && (
+                        <Pressable
+                          style={styles.doneBtn}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            setDiseasePickerOpen(false);
+                          }}
+                        >
+                          <Text style={styles.doneBtnText}>Done</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    <Icon
+                      name={diseasePickerOpen ? "chevron-up" : "chevron-down"}
+                      size={12}
+                      color="#9CA3AF"
+                      solid
+                    />
+                  </Pressable>
+
+                  {diseasePickerOpen && (
+                    <>
+                      {healthDiseaseIds.length > 0 && (
+                        <View style={styles.selectedChipsWrap}>
+                          {healthDiseaseIds.map((id) => (
+                            <Pressable
+                              key={`d-${id}`}
+                              style={styles.selectedHealthChip}
+                              onPress={() => onToggleDiseaseOption(id)}
+                              disabled={saving}
+                            >
+                              <Text style={styles.selectedHealthChipText}>{getNameById(diseaseOptions, id)}</Text>
+                              <Icon name={UI_ICONS.remove} size={11} color="#0F8F4A" solid />
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+
+                      <View style={styles.healthSearchWrap}>
+                        <Icon name="magnifying-glass" size={13} color="#6B7280" solid />
+                        <TextInput
+                          value={diseaseSearch}
+                          onChangeText={setDiseaseSearch}
+                          style={styles.healthSearchInput}
+                          placeholder="Search diseases or conditions..."
+                          placeholderTextColor="#6B7280"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                      </View>
+
+                      <ScrollView
+                        style={styles.healthDropdownList}
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={false}
+                      >
+                        {getFilteredOptions(diseaseOptions, diseaseSearch).map((item) => {
+                          const checked = hasId(healthDiseaseIds, item.id);
+                          return (
+                            <Pressable
+                              key={item.id}
+                              style={styles.healthOptionRow}
+                              onPress={() => onToggleDiseaseOption(item.id)}
+                              disabled={saving}
+                            >
+                              <View style={[styles.healthCheckbox, checked && styles.healthCheckboxOn]}>
+                                {checked && <Icon name={UI_ICONS.check} size={11} color="#03150A" solid />}
+                              </View>
+                              <Text style={styles.healthOptionText}>{item.name}</Text>
+                            </Pressable>
+                          );
+                        })}
+                        {getFilteredOptions(diseaseOptions, diseaseSearch).length === 0 && (
+                          <Text style={styles.modalNoResultsText}>No matching conditions found.</Text>
+                        )}
+                      </ScrollView>
+                    </>
+                  )}
                 </View>
               </View>
             </ScrollView>
@@ -760,23 +987,44 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={styles.inputLabel}>Phone</Text>
                 <TextInput
                   value={editProfile.phone}
-                  onChangeText={(v) => setEditProfile((s) => ({ ...s, phone: v }))}
-                  style={styles.input}
+                  onChangeText={(v) => {
+                    const value = v.replace(/[^\d+\s()-]/g, "");
+                    setEditProfile((s) => ({ ...s, phone: value }));
+                    setEditPersonalErrors((current) => ({ ...current, phone: undefined }));
+                  }}
+                  style={[styles.input, editPersonalErrors.phone && styles.inputError]}
                   placeholder="Phone"
                   placeholderTextColor="#6B7280"
                   keyboardType="phone-pad"
+                  maxLength={PHONE_MAX_LENGTH}
                   editable={!saving}
                 />
+                {editPersonalErrors.phone ? (
+                  <Text style={styles.errorText}>{editPersonalErrors.phone}</Text>
+                ) : null}
 
                 <Text style={styles.inputLabel}>Date of Birth</Text>
                 <TextInput
                   value={editProfile.dateOfBirth}
-                  onChangeText={(v) => setEditProfile((s) => ({ ...s, dateOfBirth: v }))}
-                  style={styles.input}
+                  onChangeText={(v) => {
+                    setEditProfile((s) => ({ ...s, dateOfBirth: v }));
+                    setEditPersonalErrors((current) => ({
+                      ...current,
+                      dateOfBirth: undefined,
+                    }));
+                  }}
+                  style={[
+                    styles.input,
+                    editPersonalErrors.dateOfBirth && styles.inputError,
+                  ]}
                   placeholder="YYYY-MM-DD"
                   placeholderTextColor="#6B7280"
+                  maxLength={10}
                   editable={!saving}
                 />
+                {editPersonalErrors.dateOfBirth ? (
+                  <Text style={styles.errorText}>{editPersonalErrors.dateOfBirth}</Text>
+                ) : null}
 
                 <Text style={styles.inputLabel}>Gender</Text>
                 <TextInput value={displayGender} editable={false} style={[styles.input, styles.inputDisabled]} />
@@ -836,24 +1084,6 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </Modal>
 
-          <SelectModal
-            visible={allergyPickerOpen}
-            title="Select Allergen"
-            options={allergyOptions}
-            selectedId={pendingAllergyId}
-            onSelect={setPendingAllergyId}
-            onClose={() => setAllergyPickerOpen(false)}
-          />
-
-          <SelectModal
-            visible={diseasePickerOpen}
-            title="Select Condition"
-            options={diseaseOptions}
-            selectedId={pendingDiseaseId}
-            onSelect={setPendingDiseaseId}
-            onClose={() => setDiseasePickerOpen(false)}
-          />
-
           <View style={styles.bottomNav}>
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("UserDashboard")}>
               <Icon name={UI_ICONS.home} size={18} color="#9CA3AF" solid />
@@ -862,7 +1092,7 @@ export default function ProfileScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.navCenterWrap}
-              onPress={() => Alert.alert("Coming soon", "Upload will be available soon.")}
+              onPress={() => navigation.navigate("MenuUpload")}
             >
               <View style={styles.navCenterBtn}>
                 <Icon name={UI_ICONS.upload} size={20} color="#03150A" solid />

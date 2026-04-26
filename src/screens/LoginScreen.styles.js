@@ -5,7 +5,13 @@ const GREEN = "#1DB954";
 export default StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#000" },
 
+  scrollView: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
   scroll: {
+    flexGrow: 1,
+    minHeight: "100%",
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 28,
@@ -54,6 +60,7 @@ export default StyleSheet.create({
   },
 
   form: {
+    width: "100%",
     marginTop: 6,
   },
   label: {
@@ -68,6 +75,7 @@ export default StyleSheet.create({
     marginBottom: 8,
   },
   input: {
+    width: "100%",
     backgroundColor: "#2A2A2A",
     borderWidth: 1,
     borderColor: "#4B5563",
@@ -76,8 +84,19 @@ export default StyleSheet.create({
     paddingVertical: 10,
     color: "#fff",
   },
+  inputError: {
+    borderColor: "#F87171",
+    backgroundColor: "rgba(248,113,113,0.08)",
+  },
+  errorText: {
+    color: "#FCA5A5",
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 6,
+  },
 
   passwordWrap: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#2A2A2A",
@@ -90,6 +109,12 @@ export default StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: "#fff",
+  },
+  eyeBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   forgotText: {

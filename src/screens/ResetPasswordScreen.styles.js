@@ -4,7 +4,17 @@ const GREEN = "#1DB954";
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#000" },
-  scroll: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 28 },
+  scrollView: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  scroll: {
+    flexGrow: 1,
+    minHeight: "100%",
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 28,
+  },
 
   backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 14 },
   backArrow: { color: GREEN, fontSize: 22, marginTop: -2 },
@@ -30,8 +40,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   passwordInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, color: "#fff" },
-  eyeBtn: { paddingHorizontal: 12, paddingVertical: 8 },
-  eyeText: { color: "#9CA3AF", fontSize: 16 },
+  eyeBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   btn: {
     marginTop: 18,

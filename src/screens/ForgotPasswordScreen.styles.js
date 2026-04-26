@@ -4,7 +4,17 @@ const GREEN = "#1DB954";
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#000" },
-  scroll: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 28 },
+  scrollView: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  scroll: {
+    flexGrow: 1,
+    minHeight: "100%",
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 28,
+  },
 
   backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 14 },
   backArrow: { color: GREEN, fontSize: 22, marginTop: -2 },
