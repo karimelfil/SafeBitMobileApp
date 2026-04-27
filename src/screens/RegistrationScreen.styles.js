@@ -173,6 +173,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  passwordStrength: {
+    marginTop: 8,
+    gap: 7,
+  },
+  passwordStrengthHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  passwordStrengthLabel: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  passwordStrengthValue: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  passwordStrengthTrack: {
+    flexDirection: "row",
+    gap: 5,
+  },
+  passwordStrengthSegment: {
+    flex: 1,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: "#1F2937",
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
   passwordRules: {
     marginTop: 8,
     gap: 6,

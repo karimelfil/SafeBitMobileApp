@@ -113,7 +113,7 @@ export default function LoginScreen({ navigation }) {
                 setEmail(value);
                 setErrors((current) => ({ ...current, email: undefined, form: undefined }));
               }}
-              placeholder="your.email@example.com"
+              placeholder="Enter your email"
               placeholderTextColor="#6B7280"
               autoCapitalize="none"
               keyboardType="email-address"

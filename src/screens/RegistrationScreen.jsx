@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -327,6 +328,63 @@ function getPasswordChecks(value) {
   };
 }
 
+function getPasswordStrength(value, checks) {
+  if (!value) {
+    return { score: 0, label: "Password strength", color: "#4B5563" };
+  }
+
+  const score = [
+    checks.length,
+    checks.uppercase,
+    checks.lowercase,
+    checks.number,
+    /[^A-Za-z0-9]/.test(value) || value.length >= 12,
+  ].filter(Boolean).length;
+
+  if (score <= 2) return { score, label: "Weak password", color: "#EF4444" };
+  if (score <= 4) return { score, label: "Medium password", color: "#F59E0B" };
+  return { score, label: "Strong password", color: "#1DB954" };
+}
+
+function getErrorMessage(error, fallback) {
+  const data = error?.response?.data;
+  if (data?.errors && typeof data.errors === "object") {
+    return Object.entries(data.errors)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) return `${key}: ${value.join(", ")}`;
+        return `${key}: ${String(value)}`;
+      })
+      .join("\n");
+  }
+
+  const message = data?.message || data?.title || data?.error || data;
+
+  if (typeof message === "string") return message;
+  if (Array.isArray(message)) {
+    return message
+      .map((item) => {
+        if (typeof item === "string") return item;
+        return item?.message || item?.msg || item?.error || null;
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (message && typeof message === "object") {
+    return Object.entries(message)
+      .map(([key, value]) => {
+        if (Array.isArray(value)) return `${key}: ${value.join(", ")}`;
+        if (typeof value === "string") return `${key}: ${value}`;
+        if (value && typeof value === "object") {
+          return `${key}: ${value.message || value.msg || JSON.stringify(value)}`;
+        }
+        return `${key}: ${String(value)}`;
+      })
+      .join("\n");
+  }
+
+  return error?.message || fallback;
+}
+
 function normalizePhoneDigits(value) {
   return String(value || "").replace(/[^\d]/g, "");
 }
@@ -386,15 +444,19 @@ export default function RegistrationScreen({ navigation }) {
   const [showHealthAlert, setShowHealthAlert] = useState(false);
 
   const passwordChecks = getPasswordChecks(password);
+  const passwordStrength = getPasswordStrength(password, passwordChecks);
   const canSubmitHealth =
     hasAllergies !== null &&
     hasDiseases !== null &&
     (hasAllergies === false || selectedAllergyIds.length > 0) &&
     (hasDiseases === false || selectedDiseaseIds.length > 0) &&
-    (gender !== 2 || isPregnant !== null) &&
+    (Number(gender) !== 2 || isPregnant !== null) &&
     !submitting;
   const selectedAllergyOptions = selectedAllergyIds
     .map((id) => allergies.find((item) => item.id === id))
+    .filter(Boolean);
+  const selectedDiseaseOptions = selectedDiseaseIds
+    .map((id) => diseases.find((item) => item.id === id))
     .filter(Boolean);
 
   useEffect(() => {
@@ -409,10 +471,7 @@ export default function RegistrationScreen({ navigation }) {
       } catch (e) {
         Alert.alert(
           "Error",
-          e?.response?.data?.message ||
-            e?.response?.data ||
-            e?.message ||
-            "Failed to load allergies/diseases"
+          getErrorMessage(e, "Failed to load allergies/diseases")
         );
       } finally {
         if (mounted) setLoadingLists(false);
@@ -425,7 +484,7 @@ export default function RegistrationScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    if (gender !== 2) setIsPregnant(null);
+    if (Number(gender) !== 2) setIsPregnant(null);
   }, [gender]);
 
   function toggleId(id, setSelected) {
@@ -512,7 +571,7 @@ export default function RegistrationScreen({ navigation }) {
     if (hasDiseases === null) nextErrors.hasDiseases = "Please answer this question.";
     else if (hasDiseases === true && selectedDiseaseIds.length === 0)
       nextErrors.diseases = "Select at least one condition.";
-    if (gender === 2 && isPregnant === null)
+    if (Number(gender) === 2 && isPregnant === null)
       nextErrors.isPregnant = "Please answer this question.";
     return nextErrors;
   }
@@ -525,15 +584,17 @@ export default function RegistrationScreen({ navigation }) {
       return;
     }
 
-    const fullPhone = phone.trim() ? `${country.code}${phone.trim()}` : "";
+    const fullPhone = phone.trim() ? `${country.code}${phone.trim()}` : null;
+    const selectedGender = Number(gender);
+    const pregnancyValue = selectedGender === 2 && isPregnant === true;
     const payload = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: email.trim(),
       phone: fullPhone,
       dateOfBirth: dateOfBirth.trim(),
-      gender: gender,
-      isPregnant: gender === 2 ? isPregnant === true : false,
+      gender: selectedGender,
+      isPregnant: pregnancyValue,
       password,
       confirmPassword,
       allergyIds: hasAllergies ? selectedAllergyIds : [],
@@ -548,10 +609,7 @@ export default function RegistrationScreen({ navigation }) {
     } catch (e) {
       Alert.alert(
         "Register Error",
-        e?.response?.data?.message ||
-          e?.response?.data ||
-          e?.message ||
-          "Registration failed"
+        getErrorMessage(e, "Registration failed")
       );
     } finally {
       setSubmitting(false);
@@ -611,7 +669,7 @@ export default function RegistrationScreen({ navigation }) {
 
   function ErrorText({ message }) {
     if (!message) return null;
-    return <Text style={styles.errorText}>{message}</Text>;
+    return <Text style={styles.errorText}>{String(message)}</Text>;
   }
 
   function PasswordRule({ met, label }) {
@@ -631,6 +689,17 @@ export default function RegistrationScreen({ navigation }) {
   }
 
   function PersonalStep() {
+    const commitDobDate = (selectedDate) => {
+      if (!selectedDate) return;
+      setDobDate(selectedDate);
+      const yyyy = selectedDate.getFullYear();
+      const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(selectedDate.getDate()).padStart(2, "0");
+      setDateOfBirth(`${yyyy}-${mm}-${dd}`);
+      setPersonalErrors((current) => ({ ...current, dateOfBirth: undefined }));
+      setShowPersonalAlert(false);
+    };
+
     const openDobPicker = () => {
       if (Platform.OS === "android") {
         setDobOpen(true);
@@ -643,13 +712,7 @@ export default function RegistrationScreen({ navigation }) {
               setDobOpen(false);
               return;
             }
-            setDobDate(selectedDate);
-            const yyyy = selectedDate.getFullYear();
-            const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
-            const dd = String(selectedDate.getDate()).padStart(2, "0");
-            setDateOfBirth(`${yyyy}-${mm}-${dd}`);
-            setPersonalErrors((current) => ({ ...current, dateOfBirth: undefined }));
-            setShowPersonalAlert(false);
+            commitDobDate(selectedDate);
             setDobOpen(false);
           },
         });
@@ -684,6 +747,7 @@ export default function RegistrationScreen({ navigation }) {
               autoCapitalize="words"
               autoCorrect={false}
               maxLength={50}
+              onBlur={Keyboard.dismiss}
             />
           </View>
 
@@ -698,6 +762,7 @@ export default function RegistrationScreen({ navigation }) {
               autoCapitalize="words"
               autoCorrect={false}
               maxLength={50}
+              onBlur={Keyboard.dismiss}
             />
           </View>
         </View>
@@ -715,6 +780,7 @@ export default function RegistrationScreen({ navigation }) {
           autoComplete="email"
           textContentType="emailAddress"
           maxLength={EMAIL_MAX_LENGTH}
+          onBlur={Keyboard.dismiss}
         />
         <ErrorText message={personalErrors.email} />
 
@@ -742,6 +808,7 @@ export default function RegistrationScreen({ navigation }) {
             textContentType="telephoneNumber"
             autoComplete="tel"
             maxLength={country.code === "+961" ? PHONE_MAX_LENGTH : 15}
+            onBlur={Keyboard.dismiss}
           />
         </View>
         <ErrorText message={personalErrors.phone} />
@@ -763,7 +830,10 @@ export default function RegistrationScreen({ navigation }) {
           {dobOpen ? (
             <Pressable
               style={styles.dateDoneBtn}
-              onPress={() => setDobOpen(false)}
+              onPress={() => {
+                commitDobDate(dobDate);
+                setDobOpen(false);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Confirm date of birth"
             >
@@ -784,17 +854,10 @@ export default function RegistrationScreen({ navigation }) {
             themeVariant="dark"
             maximumDate={new Date()}
             onChange={(_, selectedDate) => {
-          if (!selectedDate) return;
-          setDobDate(selectedDate);
-          const yyyy = selectedDate.getFullYear();
-          const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
-          const dd = String(selectedDate.getDate()).padStart(2, "0");
-          setDateOfBirth(`${yyyy}-${mm}-${dd}`);
-          setPersonalErrors((current) => ({ ...current, dateOfBirth: undefined }));
-          setShowPersonalAlert(false);
-        }}
-      />
-    )}
+              commitDobDate(selectedDate);
+            }}
+          />
+        )}
 
         <Text style={styles.label}>Gender *</Text>
         <View style={styles.genderRow}>
@@ -832,19 +895,19 @@ export default function RegistrationScreen({ navigation }) {
             }}
             style={[
               styles.genderCard,
-              gender === 2 ? styles.genderCardOn : styles.genderCardOff,
+              Number(gender) === 2 ? styles.genderCardOn : styles.genderCardOff,
               personalErrors.gender && styles.genderCardError,
             ]}
           >
             <Icon
               name="venus"
               size={26}
-              color={gender === 2 ? "#1DB954" : "#9AA0A6"}
+              color={Number(gender) === 2 ? "#1DB954" : "#9AA0A6"}
               solid
               style={styles.genderIcon}
             />
             <Text
-              style={[styles.genderText, gender === 2 && styles.genderTextOn]}
+              style={[styles.genderText, Number(gender) === 2 && styles.genderTextOn]}
             >
               Female
             </Text>
@@ -867,6 +930,7 @@ export default function RegistrationScreen({ navigation }) {
             autoComplete="new-password"
             passwordRules="minlength: 8; maxlength: 16; required: upper; required: lower; required: digit;"
             maxLength={PASSWORD_MAX_LENGTH}
+            onBlur={Keyboard.dismiss}
           />
           <Pressable
             onPress={() => setPasswordSecure((value) => !value)}
@@ -882,6 +946,32 @@ export default function RegistrationScreen({ navigation }) {
               solid
             />
           </Pressable>
+        </View>
+        <View
+          style={styles.passwordStrength}
+          accessibilityRole="progressbar"
+          accessibilityLabel={passwordStrength.label}
+        >
+          <View style={styles.passwordStrengthHeader}>
+            <Text style={styles.passwordStrengthLabel}>{passwordStrength.label}</Text>
+            <Text style={[styles.passwordStrengthValue, { color: passwordStrength.color }]}>
+              {passwordStrength.score}/5
+            </Text>
+          </View>
+          <View style={styles.passwordStrengthTrack}>
+            {[1, 2, 3, 4, 5].map((level) => (
+              <View
+                key={`password-strength-${level}`}
+                style={[
+                  styles.passwordStrengthSegment,
+                  level <= passwordStrength.score && {
+                    backgroundColor: passwordStrength.color,
+                    borderColor: passwordStrength.color,
+                  },
+                ]}
+              />
+            ))}
+          </View>
         </View>
         <View style={styles.passwordRules}>
           <PasswordRule met={passwordChecks.length} label="At least 8 characters" />
@@ -913,6 +1003,7 @@ export default function RegistrationScreen({ navigation }) {
             textContentType="newPassword"
             autoComplete="new-password"
             maxLength={PASSWORD_MAX_LENGTH}
+            onBlur={Keyboard.dismiss}
           />
           <Pressable
             onPress={() => setConfirmPasswordSecure((value) => !value)}
@@ -1072,9 +1163,10 @@ export default function RegistrationScreen({ navigation }) {
                     style={styles.allergySearchInput}
                     placeholder="Search allergies..."
                     placeholderTextColor="#6B7280"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onBlur={Keyboard.dismiss}
+                />
                 </View>
 
                 {loadingLists ? (
@@ -1129,67 +1221,101 @@ export default function RegistrationScreen({ navigation }) {
         <ErrorText message={healthErrors.hasDiseases} />
 
         {hasDiseases === true && (
-          <>
+          <View
+            style={[
+              styles.allergyDropdown,
+              !diseaseDropdownOpen && styles.allergyDropdownClosed,
+            ]}
+          >
             <Pressable
-              style={styles.dropdownSummary}
+              style={styles.allergyDropdownHeader}
               onPress={() => setDiseaseDropdownOpen((open) => !open)}
             >
-              <Text style={styles.dropdownSummaryText}>
-                {selectedDiseaseIds.length > 0
-                  ? `${selectedDiseaseIds.length} conditions selected`
-                  : "Select your conditions"}
-              </Text>
+              <View style={styles.allergyDropdownTitleRow}>
+                <Text style={styles.allergyDropdownTitle}>Select your conditions</Text>
+                {selectedDiseaseIds.length > 0 && (
+                  <View style={styles.selectedCountPill}>
+                    <Text style={styles.selectedCountText}>
+                      {selectedDiseaseIds.length} selected
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.allergyHeaderActions}>
+                {selectedDiseaseIds.length > 0 && (
+                  <Pressable
+                    style={styles.allergyClearBtn}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      setSelectedDiseaseIds([]);
+                      setDiseaseSearch("");
+                    }}
+                  >
+                    <Text style={styles.allergyClearText}>Clear all</Text>
+                  </Pressable>
+                )}
+                {diseaseDropdownOpen && (
+                  <Pressable
+                    style={styles.dateDoneBtn}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      setDiseaseDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={styles.dateDoneText}>Done</Text>
+                  </Pressable>
+                )}
+              </View>
               <Icon
                 name={diseaseDropdownOpen ? "chevron-up" : "chevron-down"}
-                size={14}
+                size={12}
                 color="#9CA3AF"
                 solid
               />
             </Pressable>
 
             {diseaseDropdownOpen && (
-              <View style={styles.box}>
-                <View style={styles.boxHeaderRow}>
-                  <Text style={styles.boxTitle}>Select your conditions:</Text>
-                  <View style={styles.dropdownActionRow}>
-                    <Pressable
-                      style={styles.clearAllBtn}
-                      onPress={() => {
-                        setSelectedDiseaseIds([]);
-                        setDiseaseSearch("");
-                      }}
-                    >
-                      <Text style={styles.clearAllText}>Clear all</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.dropdownDoneBtn}
-                      onPress={() => setDiseaseDropdownOpen(false)}
-                    >
-                      <Text style={styles.dropdownDoneText}>Done</Text>
-                    </Pressable>
+              <>
+                {selectedDiseaseOptions.length > 0 && (
+                  <View style={styles.selectedAllergyChips}>
+                    {selectedDiseaseOptions.map((item) => (
+                      <Pressable
+                        key={`selected-disease-${item.id}`}
+                        style={styles.selectedAllergyChip}
+                        onPress={() => toggleId(item.id, setSelectedDiseaseIds)}
+                      >
+                        <Text style={styles.selectedAllergyChipText}>{item.name}</Text>
+                        <Icon name="xmark" size={11} color="#0F8F4A" solid />
+                      </Pressable>
+                    ))}
                   </View>
-                </View>
-                <TextInput
-                  value={diseaseSearch}
-                  onChangeText={setDiseaseSearch}
-                  style={styles.dropdownSearchInput}
-                  placeholder="Search diseases or conditions"
-                  placeholderTextColor="#6B7280"
+                )}
+
+                <View style={styles.allergySearchWrap}>
+                  <Icon name="magnifying-glass" size={13} color="#6B7280" solid />
+                  <TextInput
+                    value={diseaseSearch}
+                    onChangeText={setDiseaseSearch}
+                    style={styles.allergySearchInput}
+                    placeholder="Search diseases or conditions..."
+                    placeholderTextColor="#6B7280"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  onBlur={Keyboard.dismiss}
                 />
+                </View>
 
                 {loadingLists ? (
                   <ActivityIndicator />
                 ) : (
                   <ScrollView
-                    style={styles.boxList}
-                    contentContainerStyle={styles.twoCols}
+                    style={styles.allergyBoxList}
+                    contentContainerStyle={styles.oneCol}
                     nestedScrollEnabled
                     showsVerticalScrollIndicator={false}
                   >
                     {getFilteredOptions(diseases, diseaseSearch).map((d) => (
-                      <View key={d.id} style={styles.colItem}>
+                      <View key={d.id} style={styles.fullColItem}>
                         <CheckRow
                           label={d.name}
                           checked={selectedDiseaseIds.includes(d.id)}
@@ -1206,13 +1332,13 @@ export default function RegistrationScreen({ navigation }) {
                     )}
                   </ScrollView>
                 )}
-                <ErrorText message={healthErrors.diseases} />
-              </View>
+              </>
             )}
-          </>
+            <ErrorText message={healthErrors.diseases} />
+          </View>
         )}
 
-        {gender === 2 && (
+        {Number(gender) === 2 && (
           <>
             <Text style={[styles.q, styles.qSpaced]}>
               Are you currently pregnant?
