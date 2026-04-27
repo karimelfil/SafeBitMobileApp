@@ -45,7 +45,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 120,
     gap: 16,
   },
 
@@ -685,7 +684,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#1F2937",
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingTop: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",

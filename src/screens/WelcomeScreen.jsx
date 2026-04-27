@@ -45,7 +45,7 @@ export default function WelcomeScreen({ navigation }) {
   }, [fade, slide, logoScale, logoFade]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <Animated.View
           style={[

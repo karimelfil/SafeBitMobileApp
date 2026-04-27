@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import { getScanHistory } from "../api/scan";
 import { getUserProfile } from "../api/user";
@@ -18,6 +18,7 @@ import styles from "./UserDashboard.styles";
 const logo = require("../../assets/logo.png");
 
 export default function UserDashboard({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [firstName, setFirstName] = useState("");
   const [recentScans, setRecentScans] = useState([]);
 
@@ -62,9 +63,14 @@ export default function UserDashboard({ navigation }) {
   );
 
   const greetingName = firstName || "User";
+  const totalSafe = recentScans.reduce((total, scan) => total + Number(scan.SafeCount || 0), 0);
+  const totalRisky = recentScans.reduce(
+    (total, scan) => total + Number(scan.RiskyCount || 0) + Number(scan.UnsafeCount || 0),
+    0
+  );
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
@@ -82,11 +88,15 @@ export default function UserDashboard({ navigation }) {
           </View>
 
           <Text style={styles.hello}>Hello, {greetingName}</Text>
-          <Text style={styles.sub}>Scan a menu to discover safe meals</Text>
+          <Text style={styles.sub}>Choose meals with confidence from any menu.</Text>
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: 106 + insets.bottom },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.scanCard}>
@@ -95,8 +105,8 @@ export default function UserDashboard({ navigation }) {
                 <Icon name="qrcode" size={24} color="#FFFFFF" solid />
               </View>
               <View style={styles.scanTextWrap}>
-                <Text style={styles.scanTitle}>Scan Menu</Text>
-                <Text style={styles.scanSub}>Upload a photo or PDF</Text>
+                <Text style={styles.scanTitle}>Scan a menu</Text>
+                <Text style={styles.scanSub}>Upload a photo or PDF and get meal safety results.</Text>
               </View>
             </View>
 
@@ -104,8 +114,27 @@ export default function UserDashboard({ navigation }) {
               onPress={() => navigation.navigate("MenuUpload")}
               style={styles.scanBtn}
             >
+              <Icon name="camera" size={14} color="#000000" solid />
               <Text style={styles.scanBtnText}>Start Scanning</Text>
             </Pressable>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Icon name="shield-heart" size={16} color="#1DB954" solid />
+              <View>
+                <Text style={styles.summaryValue}>{totalSafe}</Text>
+                <Text style={styles.summaryLabel}>Safe items</Text>
+              </View>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Icon name="triangle-exclamation" size={16} color="#F59E0B" solid />
+              <View>
+                <Text style={styles.summaryValue}>{totalRisky}</Text>
+                <Text style={styles.summaryLabel}>Need review</Text>
+              </View>
+            </View>
           </View>
 
           <View style={styles.recentHeader}>
@@ -119,11 +148,16 @@ export default function UserDashboard({ navigation }) {
           </View>
 
           {recentScans.length === 0 ? (
-            <View style={styles.scanItem}>
-              <Text style={styles.scanItemTitle}>No recent scans yet</Text>
-              <Text style={styles.scanItemDate}>
-                Start scanning menus and your latest results will appear here.
-              </Text>
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Icon name="receipt" size={18} color="#1DB954" solid />
+              </View>
+              <View style={styles.emptyTextWrap}>
+                <Text style={styles.scanItemTitle}>No recent scans yet</Text>
+                <Text style={styles.scanItemDate}>
+                  Your latest menu checks will appear here.
+                </Text>
+              </View>
             </View>
           ) : (
             recentScans.map((scan) => (
@@ -136,14 +170,24 @@ export default function UserDashboard({ navigation }) {
                   })
                 }
               >
-                <Text style={styles.scanItemTitle}>{scan.RestaurantName}</Text>
-                <Text style={styles.scanItemDate}>
-                  {new Date(scan.ScanDate).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </Text>
+                <View style={styles.scanItemHeader}>
+                  <View style={styles.scanItemIcon}>
+                    <Icon name="utensils" size={14} color="#1DB954" solid />
+                  </View>
+                  <View style={styles.scanItemTextWrap}>
+                    <Text style={styles.scanItemTitle} numberOfLines={1}>
+                      {scan.RestaurantName}
+                    </Text>
+                    <Text style={styles.scanItemDate}>
+                      {new Date(scan.ScanDate).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={12} color="#6B7280" solid />
+                </View>
 
                 <View style={styles.badgesRow}>
                   <View style={styles.badgeWrap}>
@@ -174,7 +218,7 @@ export default function UserDashboard({ navigation }) {
           </View>
         </ScrollView>
 
-        <View style={styles.bottomNav}>
+        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           <Pressable style={styles.navItem}>
             <Icon name="house" size={18} color="#1DB954" solid />
             <Text style={styles.navLabelActive}>Home</Text>

@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
@@ -248,6 +248,7 @@ function formatImagePickerAsset(asset, fallbackType, source = "library") {
 }
 
 export default function MenuUploadScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [restaurantName, setRestaurantName] = useState("");
   const [file, setFile] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -464,7 +465,7 @@ export default function MenuUploadScreen({ navigation }) {
 
   function renderBottomNav(active) {
     return (
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <Pressable
           style={styles.navItem}
           onPress={() => navigation.navigate("UserDashboard")}
@@ -658,7 +659,7 @@ export default function MenuUploadScreen({ navigation }) {
 
   if (viewMode === "report" && reportDish) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.container}>
           <View style={styles.header}>
             <FancyBackButton onPress={() => setViewMode("results")} label="Back" />
@@ -670,7 +671,10 @@ export default function MenuUploadScreen({ navigation }) {
           </View>
 
           <ScrollView
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: 106 + insets.bottom },
+            ]}
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.fieldBlock}>
@@ -705,7 +709,7 @@ export default function MenuUploadScreen({ navigation }) {
     );
 
     return (
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.container}>
           <View style={styles.header}>
             <FancyBackButton onPress={resetToUpload} label="New Scan" />
@@ -725,7 +729,10 @@ export default function MenuUploadScreen({ navigation }) {
           </View>
 
           <ScrollView
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: 106 + insets.bottom },
+            ]}
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.heroCard}>
@@ -813,7 +820,7 @@ export default function MenuUploadScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <View style={styles.header}>
           <FancyBackButton
@@ -827,7 +834,10 @@ export default function MenuUploadScreen({ navigation }) {
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: 106 + insets.bottom },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.fieldBlock}>

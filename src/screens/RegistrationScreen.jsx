@@ -658,7 +658,10 @@ export default function RegistrationScreen({ navigation }) {
     style: styles.scrollView,
     keyboardShouldPersistTaps: "handled",
     keyboardDismissMode: Platform.OS === "ios" ? "interactive" : "on-drag",
-    contentContainerStyle: styles.scroll,
+    contentContainerStyle: [
+      styles.scroll,
+      (showPersonalAlert || showHealthAlert) && styles.scrollWithTopAlert,
+    ],
   };
 
   function updateField(field, value, setter) {
@@ -670,6 +673,20 @@ export default function RegistrationScreen({ navigation }) {
   function ErrorText({ message }) {
     if (!message) return null;
     return <Text style={styles.errorText}>{String(message)}</Text>;
+  }
+
+  function TopValidationAlert() {
+    const visible = step === "personal" ? showPersonalAlert : showHealthAlert;
+    if (!visible) return null;
+
+    return (
+      <View style={styles.topValidationAlert} pointerEvents="none">
+        <Icon name="triangle-exclamation" size={14} color="#FCA5A5" solid />
+        <Text style={styles.topValidationAlertText}>
+          Please correct the highlighted fields.
+        </Text>
+      </View>
+    );
   }
 
   function PasswordRule({ met, label }) {
@@ -1024,15 +1041,6 @@ export default function RegistrationScreen({ navigation }) {
         </View>
         <ErrorText message={personalErrors.confirmPassword} />
 
-        {showPersonalAlert && (
-          <View style={styles.inlineAlert}>
-            <Icon name="triangle-exclamation" size={14} color="#FCA5A5" solid />
-            <Text style={styles.inlineAlertText}>
-              Please correct the highlighted fields.
-            </Text>
-          </View>
-        )}
-
         <Pressable
           onPress={() => {
             const nextErrors = validatePersonalFields();
@@ -1355,15 +1363,6 @@ export default function RegistrationScreen({ navigation }) {
           </>
         )}
 
-        {showHealthAlert && (
-          <View style={styles.inlineAlert}>
-            <Icon name="triangle-exclamation" size={14} color="#FCA5A5" solid />
-            <Text style={styles.inlineAlertText}>
-              Please correct the highlighted fields.
-            </Text>
-          </View>
-        )}
-
         <Pressable
           onPress={submitRegister}
           disabled={!canSubmitHealth}
@@ -1380,13 +1379,14 @@ export default function RegistrationScreen({ navigation }) {
   }
 
 return (
-  <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+  <SafeAreaView style={styles.safe} edges={["top"]}>
     <KeyboardAvoidingView
       style={styles.keyboardWrap}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
     >
       <View style={styles.container}>
+        <TopValidationAlert />
         {step === "personal" ? PersonalStep() : HealthStep()}
       </View>
       <Modal

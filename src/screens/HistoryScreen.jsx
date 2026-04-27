@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import { getScanDetails, getScanHistory } from "../api/scan";
 import FancyBackButton from "../components/common/FancyBackButton";
@@ -174,6 +174,7 @@ function getScanAccentStyle(status) {
 }
 
 export default function HistoryScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const initialScanFromRoute = route?.params?.initialScan || null;
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -332,7 +333,7 @@ export default function HistoryScreen({ navigation, route }) {
     const dishes = Array.isArray(selectedScan.Dishes) ? selectedScan.Dishes : [];
     const overallStatus = getOverallStatus(selectedScan);
     return (
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.container}>
           <View style={styles.header}>
             <FancyBackButton onPress={() => setSelectedScan(null)} label="Back to History" />
@@ -351,7 +352,13 @@ export default function HistoryScreen({ navigation, route }) {
             </View>
           </View>
 
-          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: 106 + insets.bottom },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.heroCard}>
               <View style={styles.heroTopRow}>
                 <View style={styles.heroContent}>
@@ -420,7 +427,7 @@ export default function HistoryScreen({ navigation, route }) {
             )}
           </ScrollView>
 
-          <View style={styles.bottomNav}>
+          <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 10) }]}>
             <Pressable style={styles.navItem} onPress={() => navigation.navigate("UserDashboard")}>
               <Icon name="house" size={18} color="#9CA3AF" solid />
               <Text style={styles.navLabel}>Home</Text>
@@ -443,7 +450,7 @@ export default function HistoryScreen({ navigation, route }) {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <View style={styles.header}>
           <FancyBackButton onPress={() => navigation.navigate("UserDashboard")} label="Back" />
@@ -472,7 +479,13 @@ export default function HistoryScreen({ navigation, route }) {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: 106 + insets.bottom },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           {loading ? (
             <View style={styles.emptyWrap}>
               <ActivityIndicator size="large" color="#1DB954" />
@@ -615,7 +628,7 @@ export default function HistoryScreen({ navigation, route }) {
           )}
         </ScrollView>
 
-        <View style={styles.bottomNav}>
+        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           <Pressable style={styles.navItem} onPress={() => navigation.navigate("UserDashboard")}>
             <Icon name="house" size={18} color="#9CA3AF" solid />
             <Text style={styles.navLabel}>Home</Text>

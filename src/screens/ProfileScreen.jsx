@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -170,6 +170,7 @@ function isUnauthorizedError(err) {
 }
 
 export default function ProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -603,7 +604,7 @@ export default function ProfileScreen({ navigation }) {
   if (loading && !profile) {
     return (
       <LinearGradient colors={["#000000", "#0A0A0A"]} style={styles.safe}>
-        <SafeAreaView style={styles.safe}>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
           <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color="#1DB954" />
             <Text style={styles.loaderText}>Loading profile...</Text>
@@ -615,7 +616,7 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <LinearGradient colors={["#000000", "#0A0A0A"]} style={styles.safe}>
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.container}>
           <View style={styles.header}>
             <FancyBackButton onPress={onBack} label="Back" />
@@ -632,7 +633,13 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           {viewMode === "main" && profile && (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: 106 + insets.bottom },
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.profileHeadCard}>
                 <LinearGradient
                   colors={["rgba(29,185,84,0.22)", "rgba(29,185,84,0.06)"]}
@@ -728,7 +735,13 @@ export default function ProfileScreen({ navigation }) {
           )}
 
           {viewMode === "editHealth" && (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: 106 + insets.bottom },
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.card}>
                 <View style={styles.cardTitleRow}>
                   <Icon name={UI_ICONS.allergies} size={16} color="#1DB954" solid />
@@ -958,7 +971,13 @@ export default function ProfileScreen({ navigation }) {
           )}
 
           {viewMode === "editPersonal" && editProfile && (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: 106 + insets.bottom },
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.card}>
                 <Text style={styles.editHint}>You can edit your personal information below and save when you are ready.</Text>
                 <Text style={styles.inputLabel}>First Name</Text>
@@ -1084,7 +1103,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </Modal>
 
-          <View style={styles.bottomNav}>
+          <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 10) }]}>
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("UserDashboard")}>
               <Icon name={UI_ICONS.home} size={18} color="#9CA3AF" solid />
               <Text style={styles.navLabel}>Home</Text>

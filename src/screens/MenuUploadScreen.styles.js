@@ -57,7 +57,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 20,
-    paddingBottom: 120,
   },
 
   fieldBlock: {
@@ -828,7 +827,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 14,
     paddingTop: 8,
-    paddingBottom: 10,
   },
 
   navItem: {

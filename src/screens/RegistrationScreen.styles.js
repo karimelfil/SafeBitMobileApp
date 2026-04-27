@@ -21,6 +21,9 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 26,
   },
+  scrollWithTopAlert: {
+    paddingTop: 74,
+  },
 
   backRow: {
     flexDirection: "row",
@@ -109,19 +112,23 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 6,
   },
-  inlineAlert: {
+  topValidationAlert: {
+    position: "absolute",
+    top: 12,
+    left: 16,
+    right: 16,
+    zIndex: 20,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 14,
     borderWidth: 1,
     borderColor: "rgba(248,113,113,0.45)",
-    backgroundColor: "rgba(248,113,113,0.12)",
+    backgroundColor: "rgba(40,12,12,0.96)",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  inlineAlertText: {
+  topValidationAlertText: {
     flex: 1,
     color: "#FECACA",
     fontSize: 12,
