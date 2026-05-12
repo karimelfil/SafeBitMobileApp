@@ -86,4 +86,18 @@ const styles = StyleSheet.create({
   },
 });
 
+export function getContentAnimationStyle(fade, slide) {
+  return {
+    opacity: fade,
+    transform: [{ translateY: slide }],
+  };
+}
+
+export function getLogoAnimationStyle(logoFade, logoScale) {
+  return {
+    opacity: logoFade,
+    transform: [{ scale: logoScale }],
+  };
+}
+
 export default styles;

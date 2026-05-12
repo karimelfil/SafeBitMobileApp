@@ -1,7 +1,7 @@
-import React from "react";
+﻿import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
-import styles from "./FancyBackButton.styles";
+import styles from "../../style/FancyBackButton.styles";
 
 export default function FancyBackButton({ label = "Back", onPress, style }) {
   return (
@@ -14,3 +14,4 @@ export default function FancyBackButton({ label = "Back", onPress, style }) {
     </Pressable>
   );
 }
+

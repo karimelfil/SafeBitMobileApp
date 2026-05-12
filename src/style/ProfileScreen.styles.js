@@ -60,7 +60,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  // ✅ New: icon badge (replaces the old circle/photo look)
   profileBadge: {
     width: 54,
     height: 54,
@@ -80,7 +79,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // (Kept for compatibility; you can delete if not used anywhere else)
   profileIconWrap: {
     width: 44,
     alignItems: "center",
@@ -598,7 +596,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // ✅ New: strong inline text for DELETE word
   deleteInlineStrong: {
     color: "#FFFFFF",
     fontWeight: "800",
@@ -665,7 +662,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
 
-  // ✅ New: disabled style for delete button until user types DELETE
   deleteDangerBtnDisabled: {
     opacity: 0.45,
   },
@@ -722,3 +718,4 @@ const styles = StyleSheet.create({
 });
 
 export default styles;
+

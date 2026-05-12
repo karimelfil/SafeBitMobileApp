@@ -47,8 +47,3 @@ export async function deleteUserDisease(userId, diseaseId) {
   const res = await api.delete(`user/${userId}/health/diseases/${diseaseId}`);
   return res.data;
 }
-
-export async function deactivateAccount(payload) {
-  const res = await api.post("auth/deactivate-account", payload);
-  return res.data;
-}

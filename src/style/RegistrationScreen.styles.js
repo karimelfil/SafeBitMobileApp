@@ -577,4 +577,31 @@ const styles = StyleSheet.create({
   keyboardWrap: { flex: 1 },
 });
 
+const PASSWORD_STRENGTH_VALUE_STYLES = {
+  default: { color: "#4B5563" },
+  weak: { color: "#EF4444" },
+  medium: { color: "#F59E0B" },
+  strong: { color: "#1DB954" },
+};
+
+const PASSWORD_STRENGTH_SEGMENT_STYLES = {
+  default: { backgroundColor: "#1F2937", borderColor: "#374151" },
+  weak: { backgroundColor: "#EF4444", borderColor: "#EF4444" },
+  medium: { backgroundColor: "#F59E0B", borderColor: "#F59E0B" },
+  strong: { backgroundColor: "#1DB954", borderColor: "#1DB954" },
+};
+
+export function getPasswordStrengthValueStyle(baseStyle, tone) {
+  return [baseStyle, PASSWORD_STRENGTH_VALUE_STYLES[tone] || PASSWORD_STRENGTH_VALUE_STYLES.default];
+}
+
+export function getPasswordStrengthSegmentStyle(baseStyle, isActive, tone) {
+  return [
+    baseStyle,
+    isActive
+      ? PASSWORD_STRENGTH_SEGMENT_STYLES[tone] || PASSWORD_STRENGTH_SEGMENT_STYLES.default
+      : PASSWORD_STRENGTH_SEGMENT_STYLES.default,
+  ];
+}
+
 export default styles;

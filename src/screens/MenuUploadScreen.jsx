@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,25 +12,59 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
-import FancyBackButton from "../components/common/FancyBackButton";
+import FancyBackButton from "./common/FancyBackButton";
 import { submitDishFeedback } from "../api/feedback";
 import { uploadMenu } from "../api/menu";
-import styles from "./MenuUploadScreen.styles";
+import styles, { getMenuIconBorderStyle } from "../style/MenuUploadScreen.styles";
 
-function getStatusIcon(status) {
-  if (status === "safe") {
-    return { name: "shield-halved", color: "#22C55E" };
-  }
-  if (status === "risky") {
-    return { name: "triangle-exclamation", color: "#EAB308" };
-  }
-  return { name: "circle-xmark", color: "#EF4444" };
+const STATUS_META = {
+  safe: {
+    label: "Safe",
+    icon: "shield-halved",
+    color: "#20C765",
+    badgeStyle: styles.badgeSafe,
+    badgeTextStyle: styles.badgeTextSafe,
+    cardStyle: styles.dishCardSafe,
+    accentStyle: styles.accentSafe,
+  },
+  risky: {
+    label: "Risky",
+    icon: "triangle-exclamation",
+    color: "#F5B400",
+    badgeStyle: styles.badgeWarning,
+    badgeTextStyle: styles.badgeTextWarning,
+    cardStyle: styles.dishCardWarning,
+    accentStyle: styles.accentRisky,
+  },
+  unsafe: {
+    label: "Unsafe",
+    icon: "circle-xmark",
+    color: "#FF4D4D",
+    badgeStyle: styles.badgeUnsafe,
+    badgeTextStyle: styles.badgeTextUnsafe,
+    cardStyle: styles.dishCardUnsafe,
+    accentStyle: styles.accentUnsafe,
+  },
+  unknown: {
+    label: "Review",
+    icon: "clipboard-list",
+    color: "#A3A3A3",
+    badgeStyle: styles.badgeNeutral,
+    badgeTextStyle: styles.badgeTextNeutral,
+    cardStyle: styles.dishCardNeutral,
+    accentStyle: styles.accentNeutral,
+  },
+};
+
+function getStatusMeta(status) {
+  return STATUS_META[String(status || "unknown").toLowerCase()] || STATUS_META.unknown;
 }
 
-function getStatusLabel(status) {
-  if (status === "safe") return "Safe";
-  if (status === "risky") return "Risky";
-  return "Unsafe";
+function getOverallStatus(safeCount, riskyCount, unsafeCount) {
+  if (unsafeCount > 0) return "unsafe";
+  if (riskyCount > 0) return "risky";
+  if (safeCount > 0) return "safe";
+  return "unknown";
 }
 
 function formatTag(tag) {
@@ -74,6 +108,7 @@ function extractStoredDishes(payload) {
   ];
 
   const merged = [];
+
   for (const list of candidates) {
     if (Array.isArray(list)) merged.push(...list);
   }
@@ -90,8 +125,8 @@ function buildDetectedIngredients(dish) {
 }
 
 function getDishPrimaryExplanation(dish, ingredients) {
-  const shortSummary =
-    dish?.short_summary || dish?.shortSummary || dish?.ShortSummary || "";
+  const shortSummary = dish?.short_summary || dish?.shortSummary || dish?.ShortSummary || "";
+
   if (String(shortSummary).trim()) {
     return String(shortSummary).trim();
   }
@@ -141,24 +176,17 @@ function mapUploadResponseToResults(payload) {
     const safetyLevel = String(
       dish?.safety_level || dish?.safetyLevel || dish?.SafetyLevel || ""
     ).toLowerCase();
+
     const needsUserConfirmation = Boolean(
       dish?.needs_user_confirmation ?? dish?.needsUserConfirmation
     );
+
     const isSafe = safetyLevel === "safe";
     const isUnsafe = safetyLevel === "unsafe";
     const hasWarning = safetyLevel === "risky" || needsUserConfirmation;
-    const displayLevel =
-      safetyLevel === "safe"
-        ? "SAFE"
-        : safetyLevel === "risky"
-        ? "RISKY"
-        : safetyLevel === "unsafe"
-        ? "UNSAFE"
-        : "UNKNOWN";
 
     const ingredients = buildDetectedIngredients(dish);
-    const rawDishName =
-      dish?.dish_name || dish?.dishName || dish?.DishName || `Dish ${index + 1}`;
+    const rawDishName = dish?.dish_name || dish?.dishName || dish?.DishName || `Dish ${index + 1}`;
     const name = String(rawDishName).replace(/^Dish Name:\s*/i, "").trim();
     const aiNote = getDishPrimaryExplanation(dish, ingredients);
 
@@ -173,7 +201,6 @@ function mapUploadResponseToResults(payload) {
       name,
       aiNote,
       category: safetyLevel || "unknown",
-      displayLevel,
       allergens: ingredients,
       diseases: buildDetectedDiseases(dish),
       isSafe,
@@ -192,18 +219,18 @@ function getAiNarrative(summaryText, safeCount, riskyCount, unsafeCount) {
   const total = safeCount + riskyCount + unsafeCount;
 
   if (!total) {
-    return "No dish classification is available yet. Open the scan to review the extracted menu items.";
+    return "No dish classification is available yet. Upload a clearer menu to review extracted items.";
   }
 
   if (unsafeCount > 0) {
-    return `AI flagged ${unsafeCount} ${unsafeCount === 1 ? "dish as unsafe" : "dishes as unsafe"} and recommends avoiding them before ordering.`;
+    return `AI flagged ${unsafeCount} ${unsafeCount === 1 ? "dish" : "dishes"} as unsafe and recommends avoiding them.`;
   }
 
   if (riskyCount > 0) {
-    return `AI marked ${riskyCount} ${riskyCount === 1 ? "dish as risky" : "dishes as risky"} and suggests confirming ingredients with the restaurant.`;
+    return `AI marked ${riskyCount} ${riskyCount === 1 ? "dish" : "dishes"} as risky. Confirm ingredients with the restaurant before ordering.`;
   }
 
-  return `AI reviewed ${total} ${total === 1 ? "dish" : "dishes"} and found a clean result with no warning flags.`;
+  return `AI reviewed ${total} ${total === 1 ? "dish" : "dishes"} and found no warning flags.`;
 }
 
 function bytesToMb(size) {
@@ -213,9 +240,7 @@ function bytesToMb(size) {
 
 function formatPickedFile(file, fallbackType) {
   const mimeType = file?.type || "";
-  const isPdf =
-    mimeType.includes("pdf") ||
-    String(file?.name || "").toLowerCase().endsWith(".pdf");
+  const isPdf = mimeType.includes("pdf") || String(file?.name || "").toLowerCase().endsWith(".pdf");
 
   return {
     name: file?.name || "selected-file",
@@ -227,10 +252,10 @@ function formatPickedFile(file, fallbackType) {
 }
 
 function formatImagePickerAsset(asset, fallbackType, source = "library") {
-  const preferredUri = asset?.uri;
   const safeName =
     asset?.fileName ||
     (source === "camera" ? `camera-menu-${Date.now()}.jpg` : `menu-${Date.now()}.jpg`);
+
   const safeType =
     asset?.mimeType ||
     asset?.type ||
@@ -241,7 +266,7 @@ function formatImagePickerAsset(asset, fallbackType, source = "library") {
       name: safeName,
       size: asset?.fileSize,
       type: safeType,
-      uri: preferredUri,
+      uri: asset?.uri,
     },
     fallbackType
   );
@@ -258,18 +283,17 @@ export default function MenuUploadScreen({ navigation }) {
   const [analysisSummary, setAnalysisSummary] = useState("");
 
   const safeDishes = results.filter((dish) => dish.isSafe);
-  const warningDishes = results.filter(
-    (dish) => dish.hasWarning || dish.category === "risky"
-  );
+  const warningDishes = results.filter((dish) => dish.hasWarning || dish.category === "risky");
   const unsafeDishes = results.filter((dish) => dish.isUnsafe);
 
   const safeCount = safeDishes.length;
   const warningCount = warningDishes.length;
   const unsafeCount = unsafeDishes.length;
-
   const totalItems = results.length;
-  const safePercent =
-    totalItems > 0 ? Math.round((safeCount / totalItems) * 100) : 0;
+  const safePercent = totalItems > 0 ? Math.round((safeCount / totalItems) * 100) : 0;
+  const selectedFileTypeLabel = file?.type || "Menu";
+  const overallStatus = getOverallStatus(safeCount, warningCount, unsafeCount);
+  const overallMeta = getStatusMeta(overallStatus);
 
   async function openUploadOptions() {
     try {
@@ -280,6 +304,7 @@ export default function MenuUploadScreen({ navigation }) {
       });
 
       if (result.canceled) return;
+
       const selected = result.assets?.[0];
       if (!selected) return;
 
@@ -294,21 +319,16 @@ export default function MenuUploadScreen({ navigation }) {
         )
       );
     } catch (err) {
-      Alert.alert(
-        "Upload Error",
-        err?.message || "Could not open the PDF picker."
-      );
+      Alert.alert("Upload Error", err?.message || "Could not open the PDF picker.");
     }
   }
 
   async function handlePhotoLibrarySelect() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
       if (!permission.granted) {
-        Alert.alert(
-          "Permission Required",
-          "Photo library permission is needed to choose an image."
-        );
+        Alert.alert("Permission Required", "Photo library permission is needed to choose an image.");
         return;
       }
 
@@ -336,11 +356,9 @@ export default function MenuUploadScreen({ navigation }) {
   async function handleCameraSelect() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
+
       if (!permission.granted) {
-        Alert.alert(
-          "Permission Required",
-          "Camera permission is needed to take a photo."
-        );
+        Alert.alert("Permission Required", "Camera permission is needed to take a photo.");
         return;
       }
 
@@ -400,11 +418,10 @@ export default function MenuUploadScreen({ navigation }) {
       Alert.alert("Analysis Complete", "Your menu safety report is ready.");
     } catch (err) {
       setIsAnalyzing(false);
+
       const isNetworkError =
         !err?.response &&
-        String(err?.message || "")
-          .toLowerCase()
-          .includes("network error");
+        String(err?.message || "").toLowerCase().includes("network error");
 
       Alert.alert(
         "Upload Error",
@@ -446,6 +463,7 @@ export default function MenuUploadScreen({ navigation }) {
         dishID: Number(reportDish.dishId),
         message: reportMessage.trim(),
       });
+
       Alert.alert("Thank You", "Your report has been submitted.");
       setReportMessage("");
       setReportDish(null);
@@ -465,137 +483,51 @@ export default function MenuUploadScreen({ navigation }) {
   function renderBottomNav(active) {
     return (
       <View style={styles.bottomNav}>
-        <Pressable
-          style={styles.navItem}
-          onPress={() => navigation.navigate("UserDashboard")}
-        >
-          <Icon
-            name="house"
-            size={18}
-            color={active === "home" ? "#1DB954" : "#9CA3AF"}
-            solid
-          />
-          <Text style={active === "home" ? styles.navLabelActive : styles.navLabel}>
-            Home
-          </Text>
+        <Pressable style={styles.navItem} onPress={() => navigation.navigate("UserDashboard")}>
+          <Icon name="house" size={18} color={active === "home" ? "#20C765" : "#A3A3A3"} solid />
+          <Text style={active === "home" ? styles.navLabelActive : styles.navLabel}>Home</Text>
         </Pressable>
 
-        <Pressable
-          style={styles.navCenterWrap}
-          onPress={() => setViewMode("upload")}
-        >
-          <View style={styles.navCenterBtn}>
+        <Pressable style={styles.navCenterWrap} onPress={() => setViewMode("upload")}>
+          <View style={styles.navCenterButton}>
             <Icon name="upload" size={20} color="#03150A" solid />
           </View>
         </Pressable>
 
-        <Pressable
-          style={styles.navItem}
-          onPress={() => navigation.navigate("Profile")}
-        >
-          <Icon
-            name="user"
-            size={18}
-            color={active === "profile" ? "#1DB954" : "#9CA3AF"}
-            solid
-          />
-          <Text style={active === "profile" ? styles.navLabelActive : styles.navLabel}>
-            Profile
-          </Text>
+        <Pressable style={styles.navItem} onPress={() => navigation.navigate("Profile")}>
+          <Icon name="user" size={18} color={active === "profile" ? "#20C765" : "#A3A3A3"} solid />
+          <Text style={active === "profile" ? styles.navLabelActive : styles.navLabel}>Profile</Text>
         </Pressable>
       </View>
     );
   }
 
   function renderDishCard(dish) {
-    const icon = getStatusIcon(dish.status);
-    const badgeLabel = getStatusLabel(dish.status);
-
-    const badgeStyle =
-      dish.status === "safe"
-        ? styles.dishStatusBadgeSafe
-        : dish.status === "risky"
-        ? styles.dishStatusBadgeWarning
-        : styles.dishStatusBadgeUnsafe;
-
-    const badgeTextStyle =
-      dish.status === "safe"
-        ? styles.dishStatusBadgeTextSafe
-        : dish.status === "risky"
-        ? styles.dishStatusBadgeTextWarning
-        : styles.dishStatusBadgeTextUnsafe;
-
-    const reportLinkStyle =
-      dish.status === "safe"
-        ? styles.reportLinkSafe
-        : dish.status === "risky"
-        ? styles.reportLinkRisky
-        : styles.reportLinkUnsafe;
-
-    const recommendationBoxStyle =
-      dish.status === "safe"
-        ? styles.recommendationBoxSafe
-        : dish.status === "risky"
-        ? styles.recommendationBoxRisky
-        : styles.recommendationBoxUnsafe;
-
-    const recommendationTextStyle =
-      dish.status === "safe"
-        ? styles.recommendationTextSafe
-        : dish.status === "risky"
-        ? styles.recommendationTextRisky
-        : styles.recommendationTextUnsafe;
-
-    const ingredientChipStyle =
-      dish.status === "safe"
-        ? styles.allergenChipSafe
-        : dish.status === "risky"
-        ? styles.allergenChipRisky
-        : styles.allergenChipUnsafe;
-
-    const ingredientChipTextStyle =
-      dish.status === "safe"
-        ? styles.allergenChipTextSafe
-        : dish.status === "risky"
-        ? styles.allergenChipTextRisky
-        : styles.allergenChipTextUnsafe;
-
-    const diseaseChipStyle =
-      dish.status === "safe"
-        ? styles.diseaseChipSafe
-        : dish.status === "risky"
-        ? styles.diseaseChipRisky
-        : styles.diseaseChipUnsafe;
-
-    const diseaseChipTextStyle =
-      dish.status === "safe"
-        ? styles.diseaseChipTextSafe
-        : dish.status === "risky"
-        ? styles.diseaseChipTextRisky
-        : styles.diseaseChipTextUnsafe;
+    const meta = getStatusMeta(dish.status);
 
     return (
-      <View
-        key={dish.id}
-        style={[
-          styles.dishCard,
-          dish.status === "safe" && styles.dishCardSafe,
-          dish.status === "risky" && styles.dishCardWarning,
-          dish.status === "unsafe" && styles.dishCardUnsafe,
-        ]}
-      >
-        <View style={styles.dishTitleRow}>
-          <Icon name={icon.name} size={16} color={icon.color} solid />
-          <Text style={styles.dishTitle}>{dish.name}</Text>
+      <View key={dish.id} style={[styles.dishCard, meta.cardStyle]}>
+        <View style={styles.dishHeaderRow}>
+          <View style={getMenuIconBorderStyle(styles.dishIconBox, meta.color)}>
+            <Icon name={meta.icon} size={16} color={meta.color} solid />
+          </View>
+
+          <View style={styles.dishTitleWrap}>
+            <Text style={styles.dishEyebrow}>Dish result</Text>
+            <Text style={styles.dishTitle}>{dish.name}</Text>
+          </View>
+
+          <View style={[styles.badge, meta.badgeStyle]}>
+            <Text style={meta.badgeTextStyle}>{meta.label}</Text>
+          </View>
         </View>
 
-        <View style={[styles.dishStatusBadge, badgeStyle]}>
-          <Text style={badgeTextStyle}>{badgeLabel}</Text>
-        </View>
-
-        <View style={[styles.recommendationBox, recommendationBoxStyle]}>
-          <Text style={styles.detailNarrativeLabel}>AI note</Text>
-          <Text style={[styles.recommendationText, recommendationTextStyle]}>
+        <View style={styles.aiNoteBox}>
+          <View style={styles.aiNoteHeader}>
+            <Icon name="sparkles" size={12} color="#D4D4D4" solid />
+            <Text style={styles.aiNoteLabel}>AI note</Text>
+          </View>
+          <Text style={styles.aiNoteText}>
             {dish.aiNote || "No detailed AI explanation was returned for this dish."}
           </Text>
         </View>
@@ -605,13 +537,8 @@ export default function MenuUploadScreen({ navigation }) {
             <Text style={styles.blockTitle}>Detected ingredients</Text>
             <View style={styles.chipsWrap}>
               {dish.allergens.map((allergen) => (
-                <View
-                  key={`${dish.id}-${allergen}`}
-                  style={[styles.allergenChip, ingredientChipStyle]}
-                >
-                  <Text style={[styles.allergenChipText, ingredientChipTextStyle]}>
-                    {allergen}
-                  </Text>
+                <View key={`${dish.id}-${allergen}`} style={styles.ingredientChip}>
+                  <Text style={styles.ingredientChipText}>{allergen}</Text>
                 </View>
               ))}
             </View>
@@ -623,13 +550,8 @@ export default function MenuUploadScreen({ navigation }) {
             <Text style={styles.blockTitle}>Detected diseases</Text>
             <View style={styles.chipsWrap}>
               {dish.diseases.map((disease) => (
-                <View
-                  key={`${dish.id}-${disease}`}
-                  style={[styles.diseaseChip, diseaseChipStyle]}
-                >
-                  <Text style={[styles.diseaseChipText, diseaseChipTextStyle]}>
-                    {disease}
-                  </Text>
+                <View key={`${dish.id}-${disease}`} style={styles.ingredientChip}>
+                  <Text style={styles.ingredientChipText}>{disease}</Text>
                 </View>
               ))}
             </View>
@@ -647,9 +569,10 @@ export default function MenuUploadScreen({ navigation }) {
               setViewMode("report");
             }}
           >
-            <Text style={[styles.reportLink, reportLinkStyle]}>
-              Report incorrect detection
-            </Text>
+            <View style={styles.reportButton}>
+              <Icon name="flag" size={12} color="#E5E5E5" solid />
+              <Text style={styles.reportButtonText}>Report incorrect detection</Text>
+            </View>
           </Pressable>
         </View>
       </View>
@@ -657,36 +580,45 @@ export default function MenuUploadScreen({ navigation }) {
   }
 
   if (viewMode === "report" && reportDish) {
+    const reportMeta = getStatusMeta(reportDish.status);
+
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.container}>
           <View style={styles.header}>
             <FancyBackButton onPress={() => setViewMode("results")} label="Back" />
-            <Text style={styles.headerTitle}>Report Issue</Text>
-            <Text style={styles.headerSubtitle}>
-              Tell us what is wrong with{" "}
-              <Text style={styles.highlightText}>{reportDish.name}</Text>.
-            </Text>
+
+            <View style={styles.detailHeaderRow}>
+              <View style={styles.headerTextWrap}>
+                <Text style={styles.screenTitle}>Report Issue</Text>
+                <Text style={styles.screenSubtitle}>
+                  Tell us what is wrong with{" "}
+                  <Text style={styles.highlightText}>{reportDish.name}</Text>.
+                </Text>
+              </View>
+
+              <View style={[styles.headerIconBox, reportMeta.accentStyle]}>
+                <Icon name="flag" size={20} color="#FFFFFF" solid />
+              </View>
+            </View>
           </View>
 
-          <ScrollView
-            contentContainerStyle={styles.content}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <View style={styles.fieldBlock}>
               <Text style={styles.label}>Your Message</Text>
               <TextInput
                 value={reportMessage}
                 onChangeText={setReportMessage}
                 placeholder="Describe the incorrect detection, missing ingredients, or any other issue..."
-                placeholderTextColor="#6B7280"
+                placeholderTextColor="#7D7D7D"
                 multiline
                 style={[styles.input, styles.textarea]}
               />
             </View>
 
-            <Pressable style={styles.primaryBtn} onPress={submitReport}>
-              <Text style={styles.primaryBtnText}>Submit Report</Text>
+            <Pressable style={styles.primaryButton} onPress={submitReport}>
+              <Icon name="paper-plane" size={15} color="#03150A" solid />
+              <Text style={styles.primaryButtonText}>Submit Report</Text>
             </Pressable>
           </ScrollView>
 
@@ -697,12 +629,7 @@ export default function MenuUploadScreen({ navigation }) {
   }
 
   if (viewMode === "results") {
-    const overallMessage = getAiNarrative(
-      analysisSummary,
-      safeCount,
-      warningCount,
-      unsafeCount
-    );
+    const overallMessage = getAiNarrative(analysisSummary, safeCount, warningCount, unsafeCount);
 
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -710,30 +637,27 @@ export default function MenuUploadScreen({ navigation }) {
           <View style={styles.header}>
             <FancyBackButton onPress={resetToUpload} label="New Scan" />
 
-            <View style={styles.resultsHeaderRow}>
-              <View style={styles.resultsHeaderBody}>
-                <Text style={styles.resultsTitle}>{restaurantName}</Text>
-                <Text style={styles.resultsSubtitle}>
-                  Personalized Menu Safety Report
+            <View style={styles.detailHeaderRow}>
+              <View style={styles.headerTextWrap}>
+                <Text style={styles.screenTitle}>{restaurantName}</Text>
+                <Text style={styles.screenSubtitle}>
+                  Personalized menu safety report with AI-backed dish notes.
                 </Text>
               </View>
 
-              <View style={styles.shieldBox}>
-                <Icon name="shield-halved" size={28} color="#FFFFFF" solid />
+              <View style={[styles.headerIconBox, overallMeta.accentStyle]}>
+                <Icon name="shield-halved" size={22} color="#FFFFFF" solid />
               </View>
             </View>
           </View>
 
-          <ScrollView
-            contentContainerStyle={styles.content}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <View style={styles.heroCard}>
               <View style={styles.heroTopRow}>
-                <View style={styles.heroContent}>
+                <View style={styles.heroTextWrap}>
                   <Text style={styles.heroEyebrow}>AI Summary</Text>
-                  <Text style={styles.heroHeadline}>Your safety overview</Text>
-                  <Text style={styles.heroSubtext}>{overallMessage}</Text>
+                  <Text style={styles.heroTitle}>Safety overview</Text>
+                  <Text style={styles.heroBody}>{overallMessage}</Text>
                 </View>
 
                 <View style={styles.scoreRing}>
@@ -742,65 +666,62 @@ export default function MenuUploadScreen({ navigation }) {
                 </View>
               </View>
 
-              <View style={styles.insightRow}>
-                <View style={styles.insightPill}>
-                  <Text style={styles.insightValueSafe}>{safeCount}</Text>
-                  <Text style={styles.insightText}>Safe</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValueSafe}>{safeCount}</Text>
+                  <Text style={styles.statLabel}>Safe</Text>
                 </View>
 
-                <View style={styles.insightPill}>
-                  <Text style={styles.insightValueWarning}>{warningCount}</Text>
-                  <Text style={styles.insightText}>Risky</Text>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValueRisky}>{warningCount}</Text>
+                  <Text style={styles.statLabel}>Risky</Text>
                 </View>
 
-                <View style={[styles.insightPill, styles.insightPillLast]}>
-                  <Text style={styles.insightValueUnsafe}>{unsafeCount}</Text>
-                  <Text style={styles.insightText}>Unsafe</Text>
+                <View style={styles.statCardLast}>
+                  <Text style={styles.statValueUnsafe}>{unsafeCount}</Text>
+                  <Text style={styles.statLabel}>Unsafe</Text>
+                </View>
+              </View>
+
+              <View style={styles.metaRow}>
+                <View style={styles.metaChip}>
+                  <Icon name="utensils" size={12} color="#D7FBE8" solid />
+                  <Text style={styles.metaChipText}>{restaurantName || "Restaurant"}</Text>
+                </View>
+
+                <View style={styles.metaChip}>
+                  <Icon name="file-lines" size={12} color="#D7FBE8" solid />
+                  <Text style={styles.metaChipText}>{selectedFileTypeLabel}</Text>
+                </View>
+
+                <View style={styles.metaChip}>
+                  <Icon name="layer-group" size={12} color="#D7FBE8" solid />
+                  <Text style={styles.metaChipText}>
+                    {totalItems} {totalItems === 1 ? "dish" : "dishes"}
+                  </Text>
                 </View>
               </View>
             </View>
 
-            {safeDishes.length > 0 && (
+            {results.length > 0 && (
               <View style={styles.sectionGroup}>
-                <View style={styles.sectionGroupHeader}>
-                  <Text style={styles.sectionGroupTitle}>Safe</Text>
-                  <Text style={styles.sectionGroupCount}>
-                    {safeDishes.length} items
-                  </Text>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Dish breakdown</Text>
+                  <Text style={styles.sectionCount}>{results.length} items</Text>
                 </View>
-                {safeDishes.map(renderDishCard)}
-              </View>
-            )}
 
-            {warningDishes.length > 0 && (
-              <View style={styles.sectionGroup}>
-                <View style={styles.sectionGroupHeader}>
-                  <Text style={styles.sectionGroupTitle}>Risky</Text>
-                  <Text style={styles.sectionGroupCount}>
-                    {warningDishes.length} items
-                  </Text>
-                </View>
-                {warningDishes.map(renderDishCard)}
-              </View>
-            )}
-
-            {unsafeDishes.length > 0 && (
-              <View style={styles.sectionGroup}>
-                <View style={styles.sectionGroupHeader}>
-                  <Text style={styles.sectionGroupTitle}>Unsafe</Text>
-                  <Text style={styles.sectionGroupCount}>
-                    {unsafeDishes.length} items
-                  </Text>
-                </View>
-                {unsafeDishes.map(renderDishCard)}
+                {results.map(renderDishCard)}
               </View>
             )}
 
             {results.length === 0 && (
               <View style={styles.emptyStateCard}>
+                <View style={styles.emptyIconWrap}>
+                  <Icon name="clipboard-list" size={24} color="#A3A3A3" solid />
+                </View>
+                <Text style={styles.emptyTitle}>No menu items detected</Text>
                 <Text style={styles.emptyStateText}>
-                  No menu items were detected from this file. Try uploading a clearer
-                  image or a higher-quality PDF.
+                  Try uploading a clearer image or a higher-quality PDF.
                 </Text>
               </View>
             )}
@@ -816,20 +737,56 @@ export default function MenuUploadScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <FancyBackButton
-            onPress={() => navigation.navigate("UserDashboard")}
-            label="Back"
-          />
-          <Text style={styles.headerTitle}>Upload Menu</Text>
-          <Text style={styles.headerSubtitle}>
-            Take a photo or upload a PDF to analyze
-          </Text>
+          <FancyBackButton onPress={() => navigation.navigate("UserDashboard")} label="Back" />
+
+          <View style={styles.detailHeaderRow}>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.screenTitle}>Upload Menu</Text>
+              <Text style={styles.screenSubtitle}>Take a photo or upload a PDF to analyze.</Text>
+            </View>
+
+            <View style={styles.headerIconBox}>
+              <Icon name="upload" size={20} color="#FFFFFF" solid />
+            </View>
+          </View>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.uploadHeroCard}>
+            <View style={styles.heroBadgeRow}>
+              <View style={styles.heroBadge}>
+                <Icon name="wand-magic-sparkles" size={11} color="#D7FBE8" solid />
+                <Text style={styles.heroBadgeText}>AI MENU CHECK</Text>
+              </View>
+
+              <View style={styles.heroMiniIcon}>
+                <Icon name="shield-halved" size={14} color="#D7FBE8" solid />
+              </View>
+            </View>
+
+            <Text style={styles.uploadHeroTitle}>Upload once, get a polished safety report</Text>
+            <Text style={styles.uploadHeroBody}>
+              Scan menus using PDFs, gallery images, or live camera capture.
+            </Text>
+
+            <View style={styles.uploadHeroStats}>
+              <View style={styles.uploadHeroStatCard}>
+                <Text style={styles.uploadHeroStatValue}>3</Text>
+                <Text style={styles.uploadHeroStatLabel}>Input modes</Text>
+              </View>
+
+              <View style={styles.uploadHeroStatCard}>
+                <Text style={styles.uploadHeroStatValue}>AI</Text>
+                <Text style={styles.uploadHeroStatLabel}>Dish checks</Text>
+              </View>
+
+              <View style={styles.uploadHeroStatCardLast}>
+                <Text style={styles.uploadHeroStatValue}>Fast</Text>
+                <Text style={styles.uploadHeroStatLabel}>Results</Text>
+              </View>
+            </View>
+          </View>
+
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Restaurant Name</Text>
             <TextInput
@@ -837,23 +794,27 @@ export default function MenuUploadScreen({ navigation }) {
               onChangeText={setRestaurantName}
               style={styles.input}
               placeholder="Enter restaurant name"
-              placeholderTextColor="#6B7280"
+              placeholderTextColor="#7D7D7D"
             />
           </View>
 
           {!file ? (
             <View>
-              <Pressable
-                style={[styles.uploadCard, styles.uploadCardDashed]}
-                onPress={openUploadOptions}
-              >
+              <Pressable style={[styles.uploadCard, styles.uploadCardDashed]} onPress={openUploadOptions}>
+                <View style={styles.uploadCardGlow} />
+
                 <View style={styles.uploadCenter}>
                   <View style={styles.uploadIconCircle}>
-                    <Icon name="upload" size={28} color="#1DB954" solid />
+                    <Icon name="file-pdf" size={28} color="#20C765" solid />
                   </View>
-                  <Text style={styles.uploadTitle}>Upload Menu</Text>
-                  <Text style={styles.uploadSub}>Tap to choose a PDF</Text>
-                  <Text style={styles.uploadTiny}>PDF only here. Use photo buttons below for images.</Text>
+
+                  <View style={styles.uploadPill}>
+                    <Text style={styles.uploadPillText}>Preferred for multi-page menus</Text>
+                  </View>
+
+                  <Text style={styles.uploadTitle}>Upload Menu PDF</Text>
+                  <Text style={styles.uploadSub}>Tap to choose a PDF file</Text>
+                  <Text style={styles.uploadTiny}>Use the photo buttons below for images.</Text>
                 </View>
               </Pressable>
 
@@ -865,39 +826,53 @@ export default function MenuUploadScreen({ navigation }) {
 
               <Pressable style={styles.actionRowCard} onPress={handlePhotoLibrarySelect}>
                 <View style={styles.actionIconBox}>
-                  <Icon name="image" size={20} color="#1DB954" solid />
+                  <Icon name="image" size={20} color="#20C765" solid />
                 </View>
+
                 <View style={styles.actionBody}>
                   <Text style={styles.actionTitle}>Choose Photo</Text>
-                  <Text style={styles.actionSub}>Gallery image analysis</Text>
+                  <Text style={styles.actionSub}>Analyze a gallery image</Text>
+                </View>
+
+                <View style={styles.actionArrowWrap}>
+                  <Icon name="arrow-right" size={14} color="#A7F3D0" solid />
                 </View>
               </Pressable>
 
               <Pressable style={styles.actionRowCard} onPress={handleCameraSelect}>
                 <View style={styles.actionIconBox}>
-                  <Icon name="camera" size={20} color="#1DB954" solid />
+                  <Icon name="camera" size={20} color="#20C765" solid />
                 </View>
+
                 <View style={styles.actionBody}>
                   <Text style={styles.actionTitle}>Take Photo</Text>
                   <Text style={styles.actionSub}>Use your camera</Text>
+                </View>
+
+                <View style={styles.actionArrowWrap}>
+                  <Icon name="arrow-right" size={14} color="#A7F3D0" solid />
                 </View>
               </Pressable>
             </View>
           ) : (
             <View style={styles.selectedFileCard}>
               <View style={styles.actionIconBox}>
-                <Icon name="file-lines" size={20} color="#1DB954" solid />
+                <Icon name="file-lines" size={20} color="#20C765" solid />
               </View>
 
               <View style={styles.selectedFileBody}>
                 <Text style={styles.selectedFileName}>{file.name}</Text>
                 <Text style={styles.selectedFileMeta}>
-                  {`${file.type} - ${file.sizeMb.toFixed(2)} MB`}
+                  {`${file.type} â€¢ ${file.sizeMb.toFixed(2)} MB`}
                 </Text>
+
+                <View style={styles.selectedFilePill}>
+                  <Text style={styles.selectedFilePillText}>Ready for analysis</Text>
+                </View>
               </View>
 
-              <Pressable style={styles.removeFileBtn} onPress={() => setFile(null)}>
-                <Icon name="circle-xmark" size={22} color="#EF4444" solid />
+              <Pressable style={styles.removeFileButton} onPress={() => setFile(null)}>
+                <Icon name="circle-xmark" size={22} color="#FF4D4D" solid />
               </Pressable>
             </View>
           )}
@@ -906,28 +881,42 @@ export default function MenuUploadScreen({ navigation }) {
             onPress={handleAnalyze}
             disabled={!file || !restaurantName.trim() || isAnalyzing}
             style={[
-              styles.primaryBtn,
-              (!file || !restaurantName.trim() || isAnalyzing) &&
-                styles.primaryBtnDisabled,
+              styles.primaryButton,
+              (!file || !restaurantName.trim() || isAnalyzing) && styles.primaryButtonDisabled,
             ]}
           >
             {isAnalyzing ? (
               <ActivityIndicator color="#03150A" />
             ) : (
-              <Text style={styles.primaryBtnText}>Analyze Menu</Text>
+              <>
+                <Icon name="wand-magic-sparkles" size={15} color="#03150A" solid />
+                <Text style={styles.primaryButtonText}>Analyze Menu</Text>
+              </>
             )}
           </Pressable>
 
           <View style={styles.infoCard}>
             <View style={styles.infoTitleRow}>
-              <Icon name="circle-exclamation" size={16} color="#1DB954" solid />
+              <Icon name="circle-exclamation" size={16} color="#20C765" solid />
               <Text style={styles.infoTitle}>How it works</Text>
             </View>
+
             <Text style={styles.infoBody}>
-              We scan the menu and identify dishes that are safer based on your
-              allergy and health profile. You will see clear recommendations,
-              warnings, and flagged items to help you order with more confidence.
+              We scan the menu and identify dishes that are safer based on your allergy and health
+              profile. You will see clear recommendations, warnings, and flagged items.
             </Text>
+
+            <View style={styles.infoFeatureRow}>
+              <View style={styles.infoFeaturePill}>
+                <Icon name="shield-halved" size={12} color="#8EF0BA" solid />
+                <Text style={styles.infoFeatureText}>Personalized</Text>
+              </View>
+
+              <View style={styles.infoFeaturePill}>
+                <Icon name="bolt" size={12} color="#8EF0BA" solid />
+                <Text style={styles.infoFeatureText}>Fast review</Text>
+              </View>
+            </View>
           </View>
         </ScrollView>
 
@@ -936,3 +925,5 @@ export default function MenuUploadScreen({ navigation }) {
     </SafeAreaView>
   );
 }
+
+

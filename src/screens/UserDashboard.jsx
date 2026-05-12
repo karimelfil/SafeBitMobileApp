@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+﻿import React, { useCallback, useState } from "react";
 import {
   Alert,
   View,
@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import { getScanHistory } from "../api/scan";
 import { getUserProfile } from "../api/user";
-import styles from "./UserDashboard.styles";
+import styles from "../style/UserDashboard.styles";
 
 const logo = require("../../assets/logo.png");
 
@@ -201,3 +201,4 @@ export default function UserDashboard({ navigation }) {
     </SafeAreaView>
   );
 }
+

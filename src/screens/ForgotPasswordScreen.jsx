@@ -13,8 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import api from "../api/client";
-import FancyBackButton from "../components/common/FancyBackButton";
-import styles from "./ForgotPasswordScreen.styles";
+import FancyBackButton from "./common/FancyBackButton";
+import styles from "../style/ForgotPasswordScreen.styles";
 const logo = require("../../assets/logo.png");
 
 export default function ForgotPasswordScreen({ navigation }) {
@@ -98,4 +98,5 @@ export default function ForgotPasswordScreen({ navigation }) {
     </SafeAreaView>
   );
 }
+
 

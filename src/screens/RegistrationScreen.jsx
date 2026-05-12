@@ -18,8 +18,11 @@ import DateTimePicker, {
   DateTimePickerAndroid,
 } from "@react-native-community/datetimepicker";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
-import FancyBackButton from "../components/common/FancyBackButton";
-import styles from "./RegistrationScreen.styles";
+import FancyBackButton from "./common/FancyBackButton";
+import styles, {
+  getPasswordStrengthSegmentStyle,
+  getPasswordStrengthValueStyle,
+} from "../style/RegistrationScreen.styles";
 
 import { register } from "../api/auth";
 import { getAllergies, getDiseases } from "../api/user";
@@ -330,7 +333,7 @@ function getPasswordChecks(value) {
 
 function getPasswordStrength(value, checks) {
   if (!value) {
-    return { score: 0, label: "Password strength", color: "#4B5563" };
+    return { score: 0, label: "Password strength", tone: "default" };
   }
 
   const score = [
@@ -341,9 +344,9 @@ function getPasswordStrength(value, checks) {
     /[^A-Za-z0-9]/.test(value) || value.length >= 12,
   ].filter(Boolean).length;
 
-  if (score <= 2) return { score, label: "Weak password", color: "#EF4444" };
-  if (score <= 4) return { score, label: "Medium password", color: "#F59E0B" };
-  return { score, label: "Strong password", color: "#1DB954" };
+  if (score <= 2) return { score, label: "Weak password", tone: "weak" };
+  if (score <= 4) return { score, label: "Medium password", tone: "medium" };
+  return { score, label: "Strong password", tone: "strong" };
 }
 
 function getErrorMessage(error, fallback) {
@@ -731,9 +734,17 @@ export default function RegistrationScreen({ navigation }) {
         </View>
 
         <ProgressHeader />
-
         <Text style={styles.h1}>Create Account</Text>
         <Text style={styles.sub}>Step 1: Personal Information</Text>
+
+        {showPersonalAlert && (
+          <View style={styles.inlineAlert}>
+            <Icon name="triangle-exclamation" size={14} color="#FCA5A5" solid />
+            <Text style={styles.inlineAlertText}>
+              Please correct the highlighted fields.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.row2}>
           <View style={styles.rowHalf}>
@@ -954,7 +965,12 @@ export default function RegistrationScreen({ navigation }) {
         >
           <View style={styles.passwordStrengthHeader}>
             <Text style={styles.passwordStrengthLabel}>{passwordStrength.label}</Text>
-            <Text style={[styles.passwordStrengthValue, { color: passwordStrength.color }]}>
+            <Text
+              style={[
+                styles.passwordStrengthValue,
+                getPasswordStrengthValueStyle(passwordStrength.score),
+              ]}
+            >
               {passwordStrength.score}/5
             </Text>
           </View>
@@ -964,10 +980,8 @@ export default function RegistrationScreen({ navigation }) {
                 key={`password-strength-${level}`}
                 style={[
                   styles.passwordStrengthSegment,
-                  level <= passwordStrength.score && {
-                    backgroundColor: passwordStrength.color,
-                    borderColor: passwordStrength.color,
-                  },
+                  level <= passwordStrength.score &&
+                    getPasswordStrengthSegmentStyle(passwordStrength.score),
                 ]}
               />
             ))}
@@ -1355,14 +1369,7 @@ export default function RegistrationScreen({ navigation }) {
           </>
         )}
 
-        {showHealthAlert && (
-          <View style={styles.inlineAlert}>
-            <Icon name="triangle-exclamation" size={14} color="#FCA5A5" solid />
-            <Text style={styles.inlineAlertText}>
-              Please correct the highlighted fields.
-            </Text>
-          </View>
-        )}
+
 
         <Pressable
           onPress={submitRegister}
@@ -1437,3 +1444,7 @@ return (
 );
 
 }
+
+
+
+

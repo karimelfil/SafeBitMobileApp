@@ -14,8 +14,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import api from "../api/client";
-import FancyBackButton from "../components/common/FancyBackButton";
-import styles from "./ResetPasswordScreen.styles";
+import FancyBackButton from "./common/FancyBackButton";
+import styles from "../style/ResetPasswordScreen.styles";
 const logo = require("../../assets/logo.png");
 
 export default function ResetPasswordScreen({ route, navigation }) {
@@ -170,4 +170,5 @@ export default function ResetPasswordScreen({ route, navigation }) {
     </SafeAreaView>
   );
 }
+
 

@@ -2,12 +2,14 @@
 import {
   View,
   Text,
-  Image,
   Pressable,
   Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import styles from "./WelcomeScreen.styles";
+import styles, {
+  getContentAnimationStyle,
+  getLogoAnimationStyle,
+} from "../style/WelcomeScreen.styles";
 
 const logo = require("../../assets/logo.png");
 
@@ -50,7 +52,7 @@ export default function WelcomeScreen({ navigation }) {
         <Animated.View
           style={[
             styles.content,
-            { opacity: fade, transform: [{ translateY: slide }] },
+            getContentAnimationStyle(fade, slide),
           ]}
         >
           <Animated.Image
@@ -58,7 +60,7 @@ export default function WelcomeScreen({ navigation }) {
             resizeMode="contain"
             style={[
               styles.logo,
-              { opacity: logoFade, transform: [{ scale: logoScale }] },
+              getLogoAnimationStyle(logoFade, logoScale),
             ]}
           />
 
@@ -97,3 +99,4 @@ export default function WelcomeScreen({ navigation }) {
     </SafeAreaView>
   );
 }
+

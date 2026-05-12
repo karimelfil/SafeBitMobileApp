@@ -27,8 +27,8 @@ import {
   updateUserProfile,
 } from "../api/user";
 import { deactivateAccount, logout } from "../api/auth";
-import FancyBackButton from "../components/common/FancyBackButton";
-import styles from "./ProfileScreen.styles";
+import FancyBackButton from "./common/FancyBackButton";
+import styles from "../style/ProfileScreen.styles";
 
 const GENDER_OPTIONS = [
   { code: 1, label: "Male" },
@@ -1109,3 +1109,4 @@ export default function ProfileScreen({ navigation }) {
     </LinearGradient>
   );
 }
+

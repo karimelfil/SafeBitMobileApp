@@ -13,8 +13,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6 as Icon } from "@expo/vector-icons";
 import { login } from "../api/auth";
-import FancyBackButton from "../components/common/FancyBackButton";
-import styles from "./LoginScreen.styles";
+import FancyBackButton from "./common/FancyBackButton";
+import styles from "../style/LoginScreen.styles";
 
 const logo = require("../../assets/logo.png");
 const EMAIL_MAX_LENGTH = 254;
@@ -197,3 +197,4 @@ export default function LoginScreen({ navigation }) {
     </SafeAreaView>
   );
 }
+

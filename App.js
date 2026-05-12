@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { StatusBar } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -13,6 +13,7 @@ import HistoryScreen from "./src/screens/HistoryScreen";
 
 import ForgotPasswordScreen from "./src/screens/ForgotPasswordScreen";
 import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
+import appStyles from "./src/style/App.styles";
 
 const Stack = createNativeStackNavigator();
 
@@ -28,13 +29,13 @@ const linking = {
 export default function App() {
   return (
     <NavigationContainer linking={linking}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <StatusBar barStyle="light-content" backgroundColor={appStyles.screenContent.backgroundColor} />
 
       <Stack.Navigator
         initialRouteName="Welcome"
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: "#000000" },
+          contentStyle: appStyles.screenContent,
           animation: "fade_from_bottom",
         }}
       >
@@ -53,3 +54,4 @@ export default function App() {
     </NavigationContainer>
   );
 }
+
